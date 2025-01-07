@@ -83,6 +83,7 @@ collate_fn = MOSEICollator(
 if __name__ == "__main__":
     print("Running with configuration")
     pprint(C)
+    SUBSET_FRACTION = 0.3
     train, dev, test, vocab = mosi(
         C["data_dir"],
         modalities=["text", "glove", "audio", "visual"],
@@ -92,6 +93,8 @@ if __name__ == "__main__":
         pad_back=False,
         aligned=False,
         cache=os.path.join(C["cache_dir"], "mosei_avt.p"),
+        fraction=SUBSET_FRACTION,  # Pass the fraction here
+
     )
 
     # Use GloVe features for text inputs
