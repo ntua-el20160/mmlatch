@@ -83,7 +83,7 @@ collate_fn = MOSEICollator(
 if __name__ == "__main__":
     print("Running with configuration")
     pprint(C)
-    SUBSET_FRACTION = 0.3
+    SUBSET_FRACTION = 1
     train, dev, test, vocab = mosi(
         C["data_dir"],
         modalities=["text", "glove", "audio", "visual"],
