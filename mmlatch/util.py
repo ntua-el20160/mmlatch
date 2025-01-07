@@ -190,7 +190,7 @@ def safe_mkdirs(path: str) -> None:
 
 def yaml_load(fname: str) -> GenericDict:
     with open(fname, "r") as fd:
-        data = yaml.load(fd)
+        data = yaml.load(fd, Loader=yaml.Loader) # Changed from data = yaml.load(fd)
     return data
 
 
