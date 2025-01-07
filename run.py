@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from ignite.metrics import Accuracy, Fbeta, Loss
 from torch.utils.data import DataLoader
 
-from mmlatch.cmusdk import mosei
+from mmlatch.cmusdk import mosei, mosi
 from mmlatch.config import load_config
 from mmlatch.data import MOSEI, MOSEICollator, ToTensor
 from mmlatch.mm import AudioVisualTextClassifier, AVTClassifier
@@ -83,7 +83,7 @@ collate_fn = MOSEICollator(
 if __name__ == "__main__":
     print("Running with configuration")
     pprint(C)
-    train, dev, test, vocab = mosei(
+    train, dev, test, vocab = mosi(
         C["data_dir"],
         modalities=["text", "glove", "audio", "visual"],
         remove_pauses=False,

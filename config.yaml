@@ -1,5 +1,5 @@
-data_dir: /home/geopar/projects/mm/data/cmumosei
-results_dir: /home/geopar/projects/mm/clean_code/results/
+data_dir: /content/drive/MyDrive/CMU-MOSI
+results_dir: /content/drive/MyDrive/our_results
 train: true
 test: true
 overfit_batch: false
