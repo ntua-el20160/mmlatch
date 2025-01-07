@@ -31,9 +31,9 @@ class PackSequence(nn.Module):
         x = pack_padded_sequence(
             x, lengths, batch_first=self.batch_first, enforce_sorted=False
         )
-        lengths = lengths[x.sorted_indices]
-        return x, lengths
-
+        sorted_indices_cpu = x.sorted_indices.cpu()
+        lengths = lengths.cpu()[sorted_indices_cpu]
+        return x, lengths.to(self.device)
 
 class RNN(nn.Module):
     def __init__(
