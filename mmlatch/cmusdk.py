@@ -140,7 +140,7 @@ def load_dataset(
     }
     data.add_computational_sequences(label_recipe, destination=None)
     data.align(modality_map["labels"])
-    data.hard_unify()
+    data.unify() #changed hard_unify to unify
     align_path = base_path + "_final_aligned"
     safe_mkdirs(align_path)
     deploy(data, align_path)
