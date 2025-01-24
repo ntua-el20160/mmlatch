@@ -94,7 +94,7 @@ collate_fn = MOSEICollator( #Defines the collator for the DataLoader
 if __name__ == "__main__":
     print("Running with configuration")
     pprint(C)
-    SUBSET_FRACTION = 0.3 #Defines the fraction of the dataset to be used
+    SUBSET_FRACTION = 1 #Defines the fraction of the dataset to be used
     train, dev, test, vocab = mosi( #loads the mosi dataset
         C["data_dir"],
         modalities=["text", "glove", "audio", "visual"],
