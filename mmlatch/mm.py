@@ -7,61 +7,114 @@ from mmlatch.rnn import RNN, AttentiveRNN
 
 
 class FeedbackUnit(nn.Module):
+    """Applies the mask to the input. Either a learnable static mask or a learnable sequence mask"""
     def __init__(
         self,
         hidden_dim,
-        mod1_sz,
+        mod1_sz, # size of the first modality(mask size)
         mask_type="learnable_sequence_mask",
         dropout=0.1,
         device="cpu",
+        mask_index = 1, #add mask index parameter
     ):
         super(FeedbackUnit, self).__init__()
         self.mask_type = mask_type
         self.mod1_sz = mod1_sz
         self.hidden_dim = hidden_dim
 
-        if mask_type == "learnable_sequence_mask":
+        if mask_type == "learnable_sequence_mask":#if the mask is learnable sequence mask, initialize two RNNs
             self.mask1 = RNN(hidden_dim, mod1_sz, dropout=dropout, device=device)
             self.mask2 = RNN(hidden_dim, mod1_sz, dropout=dropout, device=device)
-        else:
+        else: #if the mask is learnable static mask, initialize two linear layers
             self.mask1 = nn.Linear(hidden_dim, mod1_sz)
             self.mask2 = nn.Linear(hidden_dim, mod1_sz)
 
-        mask_fn = {
+        mask_fn = {#dictionary to store the mask functions
             "learnable_static_mask": self._learnable_static_mask,
             "learnable_sequence_mask": self._learnable_sequence_mask,
         }
 
-        self.get_mask = mask_fn[self.mask_type]
+        self.get_mask = mask_fn[self.mask_type] #get the mask function based on the mask type
 
-    def _learnable_sequence_mask(self, y, z, lengths=None):
+    def _learnable_sequence_mask(self, y, z, lengths=None, mask_index = 1):
+        """EDITS HERE !!!!!"""
+        """Generates a dynamic, per-timestep mask based on the feedback from inputs y and z"""
+        """Mask index:
+        1-> average
+        2-> element_wise maximum
+        3-> element_wise minimum
+        4-> residual connection(add original again)
+        5-> element wise max deviation from 0.5
+        """
         oy, _, _ = self.mask1(y, lengths)
         oz, _, _ = self.mask2(z, lengths)
+        mask1 = torch.sigmoid(oy)
+        mask2 = torch.sigmoid(oz)
 
-        lg = (torch.sigmoid(oy) + torch.sigmoid(oz)) * 0.5
+        if self.mask_index == 1 or self.mask_index == 4:
+            mask = (mask1 + mask2) * 0.5
+        elif self.mask_index == 2:
+            mask = torch.max(mask1, mask2)
+        elif self.mask_index == 3:
+            mask = torch.min(mask1, mask2)
+        elif self.mask_index == 5:
+            mask = torch.max(torch.abs(mask1 - 0.5), torch.abs(mask2 - 0.5))
+        else:
+            raise ValueError("Invalid mask_index. Must be between 1 and 5.")
 
-        mask = lg
+        
+        #lg = (torch.sigmoid(oy) + torch.sigmoid(oz)) * 0.5
+
+        #mask = lg
 
         return mask
 
+    #def _learnable_static_mask(self, y, z, lengths=None):
     def _learnable_static_mask(self, y, z, lengths=None):
+        """Generates a static mask based on the feedback from inputs y and z"""
         y = self.mask1(y)
         z = self.mask2(z)
         mask1 = torch.sigmoid(y)
         mask2 = torch.sigmoid(z)
-        mask = (mask1 + mask2) * 0.5
+        #mask = (mask1 + mask2) * 0.5
+        if self.mask_index == 1 or self.mask_index == 4:
+            mask = (mask1 + mask2) * 0.5
+        elif self.mask_index == 2:
+            mask = torch.max(mask1, mask2)
+        elif self.mask_index == 3:
+            mask = torch.min(mask1, mask2)
+        elif self.mask_index == 4:
+            mask = (mask1 + mask2) * 0.5 + 1  
+        elif self.mask_index == 5:
+            mask = torch.max(torch.abs(mask1 - 0.5), torch.abs(mask2 - 0.5))
+        else:
+            raise ValueError("Invalid mask_index. Must be between 1 and 5.")
 
         return mask
+    def set_mask_index(self, new_mask_index):
+        """
+        Updates the mask_index to a new value.
+        
+        Args:
+            new_mask_index (int): New mask index value (1 to 5).
+        """
+        if new_mask_index not in [1, 2, 3, 4, 5]:
+            raise ValueError("mask_index must be an integer between 1 and 5.")
+        self.mask_index = new_mask_index
 
     def forward(self, x, y, z, lengths=None):
+        """Applies the mask to the modality x based on the feedback from y and z"""
         mask = self.get_mask(y, z, lengths=lengths)
-        mask = F.dropout(mask, p=0.2)
+        mask = F.dropout(mask, p=0.2) #apply dropout to the mask
+        if(self.mask_index == 4): # add the residual part after dropout
+            mask = mask+1
         x_new = x * mask
 
         return x_new
 
 
 class Feedback(nn.Module):
+    """Feedback mechanism to apply feedback-based masking across three modalities (x, y, z"""
     def __init__(
         self,
         hidden_dim,
@@ -71,14 +124,17 @@ class Feedback(nn.Module):
         mask_type="learnable_sequence_mask",
         dropout=0.1,
         device="cpu",
+        mask_index = 1, #add mask index parameter
     ):
         super(Feedback, self).__init__()
+        # Initialize a feedback unit for each modality
         self.f1 = FeedbackUnit(
             hidden_dim,
             mod1_sz,
             mask_type=mask_type,
             dropout=dropout,
             device=device,
+            mask_index=mask_index
         )
         self.f2 = FeedbackUnit(
             hidden_dim,
@@ -86,6 +142,7 @@ class Feedback(nn.Module):
             mask_type=mask_type,
             dropout=dropout,
             device=device,
+            mask_index=mask_index
         )
         self.f3 = FeedbackUnit(
             hidden_dim,
@@ -93,9 +150,20 @@ class Feedback(nn.Module):
             mask_type=mask_type,
             dropout=dropout,
             device=device,
+            mask_index=mask_index
         )
-
+    def set_mask_index(self, new_mask_index):
+        """
+        Updates the mask_index for all FeedbackUnit instances.
+        
+        Args:
+            new_mask_index (int): New mask index value (1 to 5).
+        """
+        self.f1.set_mask_index(new_mask_index)
+        self.f2.set_mask_index(new_mask_index)
+        self.f3.set_mask_index(new_mask_index)
     def forward(self, low_x, low_y, low_z, hi_x, hi_y, hi_z, lengths=None):
+        """Applies the feedback mechanism across three modalities"""
         x = self.f1(low_x, hi_y, hi_z, lengths=lengths)
         y = self.f2(low_y, hi_x, hi_z, lengths=lengths)
         z = self.f3(low_z, hi_x, hi_y, lengths=lengths)
@@ -104,41 +172,44 @@ class Feedback(nn.Module):
 
 
 class AttentionFuser(nn.Module):
+    """ combines multiple attention mechanisms to fuse information from three modalities"""
     def __init__(self, proj_sz=None, return_hidden=True, device="cpu"):
         super(AttentionFuser, self).__init__()
         self.return_hidden = return_hidden
+        #Text-Audio attention
         self.ta = SymmetricAttention(
             attention_size=proj_sz,
             dropout=0.1,
         )
-
+        #Video-Audio attention
         self.va = SymmetricAttention(
             attention_size=proj_sz,
             dropout=0.1,
         )
-
+        #Text-Video attention
         self.tv = SymmetricAttention(
             attention_size=proj_sz,
             dropout=0.1,
         )
-
+        #Text-Audio-Video attention
         self.tav = Attention(
             attention_size=proj_sz,
             dropout=0.1,
         )
-
+        #output size of the fuser
         self.out_size = 7 * proj_sz
 
     def forward(self, txt, au, vi):
-        ta, at = self.ta(txt, au)
+        # Apply cross modal attention mechanisms
+        ta, at = self.ta(txt, au) 
         va, av = self.va(vi, au)
         tv, vt = self.tv(txt, vi)
-
+        #combine the attention outputs
         av = va + av
         tv = vt + tv
         ta = ta + at
 
-        tav, _ = self.tav(txt, queries=av)
+        tav, _ = self.tav(txt, queries=av) 
 
         # Sum weighted attention hidden states
 
@@ -152,20 +223,22 @@ class AttentionFuser(nn.Module):
             tav = tav.sum(1)
 
         # B x L x 7*D
+        #concatenate the attention outputs
         fused = torch.cat([txt, au, vi, ta, tv, av, tav], dim=-1)
 
         return fused
 
 
 class AttRnnFuser(nn.Module):
+    """ AttRnnFuser class integrates the AttentionFuser with an AttentiveRNN to further process the fused representations"""
     def __init__(self, proj_sz=None, device="cpu", return_hidden=False):
         super(AttRnnFuser, self).__init__()
-        self.att_fuser = AttentionFuser(
+        self.att_fuser = AttentionFuser( #initialize the attention fuser
             proj_sz=proj_sz,
             return_hidden=True,
             device=device,
         )
-        self.rnn = AttentiveRNN(
+        self.rnn = AttentiveRNN( #initialize the AttentiveRNN
             self.att_fuser.out_size,
             proj_sz,
             bidirectional=True,
@@ -177,6 +250,7 @@ class AttRnnFuser(nn.Module):
         self.out_size = self.rnn.out_size
 
     def forward(self, txt, au, vi, lengths):
+        """Forward pass of the AttRnnFuser"""
         att = self.att_fuser(txt, au, vi)  # B x L x 7 * D
         out = self.rnn(att, lengths)  # B x L x 2 * D
 
@@ -184,6 +258,7 @@ class AttRnnFuser(nn.Module):
 
 
 class AudioEncoder(nn.Module):
+    """AttentiveRNN tailored for processing audio data"""
     def __init__(self, cfg, device="cpu"):
         super(AudioEncoder, self).__init__()
         self.audio = AttentiveRNN(
@@ -209,6 +284,7 @@ class AudioEncoder(nn.Module):
 
 
 class VisualEncoder(nn.Module):
+    """AttentiveRNN tailored for processing visual data"""
     def __init__(self, cfg, device="cpu"):
         super(VisualEncoder, self).__init__()
         self.visual = AttentiveRNN(
@@ -234,6 +310,7 @@ class VisualEncoder(nn.Module):
 
 
 class GloveEncoder(nn.Module):
+    """AttentiveRNN tailored for processing text data"""
     def __init__(self, cfg, device="cpu"):
         super(GloveEncoder, self).__init__()
         self.text = AttentiveRNN(
@@ -259,6 +336,7 @@ class GloveEncoder(nn.Module):
 
 
 class AudioVisualTextEncoder(nn.Module):
+    """AudioVisualTextEncoder class integrates the encoders for text, audio, and visual modalities"""
     def __init__(
         self,
         audio_cfg=None,
@@ -298,9 +376,11 @@ class AudioVisualTextEncoder(nn.Module):
                 mask_type=fuse_cfg["feedback_type"],
                 dropout=0.1,
                 device=device,
+                mask_index=fuse_cfg.get("mask_index", 1),
             )
 
     def _encode(self, txt, au, vi, lengths):
+        """Encodes the input data for each modality"""
         txt = self.text(txt, lengths)
         au = self.audio(au, lengths)
         vi = self.visual(vi, lengths)
@@ -308,6 +388,7 @@ class AudioVisualTextEncoder(nn.Module):
         return txt, au, vi
 
     def _fuse(self, txt, au, vi, lengths):
+        """Fuses the encoded representations from the three modalities for classifier input"""
         fused = self.fuser(txt, au, vi, lengths)
 
         return fused
@@ -324,6 +405,7 @@ class AudioVisualTextEncoder(nn.Module):
 
 
 class AudioVisualTextClassifier(nn.Module):
+    """AudioVisualTextClassifier class integrates the AudioVisualTextEncoder with a classifier"""
     def __init__(
         self,
         audio_cfg=None,
@@ -362,6 +444,7 @@ class AudioVisualTextClassifier(nn.Module):
 
 
 class UnimodalEncoder(nn.Module):
+    """ a generalized encoder for a single modality, encapsulating an AttentiveRNN"""
     def __init__(
         self,
         input_size,
@@ -396,6 +479,7 @@ class UnimodalEncoder(nn.Module):
 
 
 class AVTEncoder(nn.Module):
+    """A variant of AudioVisualText Encoder, uses Unimodal Encoder"""
     def __init__(
         self,
         text_input_size,
@@ -412,6 +496,7 @@ class AVTEncoder(nn.Module):
         feedback=False,
         feedback_type="learnable_sequence_mask",
         device="cpu",
+        mask_index=1,  # Add mask_index parameter
     ):
         super(AVTEncoder, self).__init__()
         self.feedback = feedback
@@ -468,6 +553,7 @@ class AVTEncoder(nn.Module):
                 mask_type=feedback_type,
                 dropout=0.1,
                 device=device,
+                mask_index=mask_index,  # Pass mask_index
             )
 
     def _encode(self, txt, au, vi, lengths):
@@ -494,6 +580,7 @@ class AVTEncoder(nn.Module):
 
 
 class AVTClassifier(nn.Module):
+    """AVTEncoder + Final Classifier"""
     def __init__(
         self,
         text_input_size,
@@ -511,6 +598,7 @@ class AVTClassifier(nn.Module):
         feedback_type="learnable_sequence_mask",
         device="cpu",
         num_classes=1,
+        mask_index=1,  # Add mask_index parameter
     ):
         super(AVTClassifier, self).__init__()
 
@@ -529,6 +617,7 @@ class AVTClassifier(nn.Module):
             feedback=feedback,
             feedback_type=feedback_type,
             device=device,
+            mask_index=mask_index,  # Pass mask_index
         )
 
         self.classifier = nn.Linear(self.encoder.out_size, num_classes)

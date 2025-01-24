@@ -21,6 +21,7 @@ model:
   attention: true
   feedback: true
   feedback_type: learnable_sequence_mask
+  mask_index: 2
 
 experiment:
   name: mosei-sentiment-audio-text-visual

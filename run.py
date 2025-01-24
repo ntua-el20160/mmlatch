@@ -18,6 +18,7 @@ from mmlatch.util import safe_mkdirs
 
 
 class BCE(nn.Module):
+    """Custom binary cross-entropy loss function"""
     def __init__(self):
         super(BCE, self).__init__()
 
@@ -28,9 +29,10 @@ class BCE(nn.Module):
 
 
 def get_parser():
+    """Defines and returns an ArgumentParser for parsing command-line inputs"""
     parser = argparse.ArgumentParser(description="CLI parser for experiment")
 
-    parser.add_argument(
+    parser.add_argument( #pecifies the dropout probability to be used in the model.
         "--dropout",
         dest="common.dropout",
         default=None,
@@ -38,7 +40,7 @@ def get_parser():
         help="Dropout probabiity",
     )
 
-    parser.add_argument(
+    parser.add_argument( #Defines the projection size for modality features.
         "--proj-size",
         dest="fuse.projection_size",
         default=None,
@@ -46,18 +48,18 @@ def get_parser():
         help="Modality projection size",
     )
 
-    parser.add_argument(
+    parser.add_argument( #Defines if the RNN is bidirectional
         "--bidirectional",
         dest="common.bidirectional",
         action="store_true",
         help="Use BiRNNs",
     )
 
-    parser.add_argument(
+    parser.add_argument( #Defines if LSTM or GRU will be used
         "--rnn-type", dest="common.rnn_type", default=None, type=str, help="lstm or gru"
     )
 
-    parser.add_argument(
+    parser.add_argument( #Defines if feedback will be used
         "--feedback",
         dest="feedback",
         action="store_true",
@@ -65,6 +67,15 @@ def get_parser():
     )
 
     parser.add_argument(
+        "--mask-index",
+        dest="model.mask_index",
+        default=1,
+        type=int,
+        choices=[1, 2, 3, 4, 5],
+        help="Masking strategy index (1: average, 2: max, 3: min, 4: residual, 5: max deviation from 0.5)",
+    )
+
+    parser.add_argument( #Defines the directory for the results
         "--result-dir",
         dest="results_dir",
         help="Results directory",
@@ -73,9 +84,9 @@ def get_parser():
     return parser
 
 
-C = load_config(parser=get_parser())
+C = load_config(parser=get_parser()) #Loads the configuration file
 
-collate_fn = MOSEICollator(
+collate_fn = MOSEICollator( #Defines the collator for the DataLoader
     device="cpu", modalities=["text", "audio", "visual"], max_length=-1
 )
 
@@ -83,8 +94,8 @@ collate_fn = MOSEICollator(
 if __name__ == "__main__":
     print("Running with configuration")
     pprint(C)
-    SUBSET_FRACTION = 0.3
-    train, dev, test, vocab = mosi(
+    SUBSET_FRACTION = 0.3 #Defines the fraction of the dataset to be used
+    train, dev, test, vocab = mosi( #loads the mosi dataset
         C["data_dir"],
         modalities=["text", "glove", "audio", "visual"],
         remove_pauses=False,
@@ -107,20 +118,22 @@ if __name__ == "__main__":
     for d in test:
         d["text"] = d["glove"]
 
+    #converts data to tensors
     to_tensor = ToTensor(device="cpu")
     to_tensor_float = ToTensor(device="cpu", dtype=torch.float)
 
     def create_dataloader(data, shuffle=True):
+        """Creates a DataLoader for the given data"""
         d = MOSEI(data, modalities=["text", "glove", "audio", "visual"], select_label=0)
-        d.map(to_tensor_float, "visual", lazy=True)
-        d.map(to_tensor_float, "text", lazy=True)
-        d = d.map(to_tensor_float, "audio", lazy=True)
-        d.apply_transforms()
+        d.map(to_tensor_float, "visual", lazy=True) #maps the visual data to tensor
+        d.map(to_tensor_float, "text", lazy=True) #maps the text data to tensor
+        d = d.map(to_tensor_float, "audio", lazy=True) #maps the audio data to tensor
+        d.apply_transforms() #applies the transforms to the data
         dataloader = DataLoader(
             d,
             batch_size=C["dataloaders"]["batch_size"],
             num_workers=C["dataloaders"]["num_workers"],
-            pin_memory=C["dataloaders"]["batch_size"],
+            pin_memory=C["dataloaders"]["pin_memory"],
             shuffle=shuffle,
             collate_fn=collate_fn,
         )
@@ -148,6 +161,7 @@ if __name__ == "__main__":
         feedback_type=C["model"]["feedback_type"],
         device=C["device"],
         num_classes=C["num_classes"],
+        mask_index=C["model"]["mask_index"],  # Pass mask_index
     )
 
     def count_parameters(model):
@@ -265,6 +279,7 @@ if __name__ == "__main__":
             retain_graph=C["trainer"]["retain_graph"],
             loss_fn=criterion,
             device=C["device"],
+            
         )
 
         predictions, targets = trainer.predict(test_loader)
