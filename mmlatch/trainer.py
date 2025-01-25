@@ -153,15 +153,15 @@ class Trainer(object):
         self: TrainerType, batch: List[torch.Tensor]
     ) -> Tuple[torch.Tensor, ...]:
         inputs, targets = self.parse_batch(batch) #extracts inputs and targets from the batch
-        y_pred = self.model(inputs) #predicts the output
+        y_pred,mask_txt,mask_au,mask_vi = self.model(inputs) #predicts the output
 
-        return y_pred, targets #returns the predicted output and the target
+        return y_pred, targets,mask_txt,mask_au,mask_vi #returns the predicted output and the target
 
     def train_step(
         self: TrainerType, engine: Engine, batch: List[torch.Tensor]
     ) -> float:
         self.model.train()
-        y_pred, targets = self.get_predictions_and_targets(batch)
+        y_pred, targets,_,_,_ = self.get_predictions_and_targets(batch)
         loss = self.loss_fn(y_pred, targets)  # type: ignore
         loss = loss / self.accumulation_steps #scales the loss by the accumulation steps
         loss.backward(retain_graph=self.retain_graph) #backpropagates the loss, retain_graph flag determines whether the computational graph is retained
@@ -185,23 +185,33 @@ class Trainer(object):
     ) -> Tuple[torch.Tensor, ...]:
         self.model.eval() #sets the model to evaluation mode
         with torch.no_grad():
-            y_pred, targets = self.get_predictions_and_targets(batch)
+            y_pred, targets,_,_,_ = self.get_predictions_and_targets(batch)
 
             return y_pred, targets
 
     #predict method is used to predict the output of the model on the given dataloader
     def predict(self: TrainerType, dataloader: DataLoader) -> State:
-        predictions, targets = [], []
+        predictions, targets,masks_txt,masks_au,masks_vi = [],[],[],[],[]
 
         for batch in dataloader:
             self.model.eval()
             with torch.no_grad():
-                pred, targ = self.get_predictions_and_targets(batch)
+                pred, targ,mask_txt,mask_au,mask_vi = self.get_predictions_and_targets(batch)
                 predictions.append(pred)
                 targets.append(targ)
+                masks_txt.append(mask_txt)
+                masks_au.append(mask_au)
+                masks_vi.append(mask_vi)
 
-        return predictions, targets
-    
+        return predictions, targets,masks_txt,masks_au,masks_vi
+    def set_mask_index(self, new_mask_index):
+        """
+        Updates the mask_index for all FeedbackUnit instances.
+        
+        Args:
+            new_mask_index (int): New mask index value (1 to 5).
+        """
+        self.model.set_mask_index(new_mask_index)
     #Defines the training loop
     def fit(
         self: TrainerType,
@@ -305,8 +315,9 @@ class MOSEITrainer(Trainer):#inherits from the Trainer class and specialises 2 f
         self, batch: List[torch.Tensor]
     ) -> Tuple[torch.Tensor, ...]:
         inputs, targets = self.parse_batch(batch)
-        y_pred = self.model(inputs)
+        #y_pred = self.model(inputs)
+        y_pred,mask_txt,mask_au,mask_vi = self.model(inputs)
         y_pred = y_pred.squeeze()
         targets = targets.squeeze()
 
-        return y_pred, targets
+        return y_pred, targets, mask_txt,mask_au,mask_vi

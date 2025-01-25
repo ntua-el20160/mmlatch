@@ -1,9 +1,173 @@
 import torch
 import numpy as np
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, confusion_matrix, precision_recall_fscore_support
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import precision_recall_fscore_support
 from sklearn.metrics import accuracy_score, f1_score
+from scipy.spatial.distance import cosine
+from scipy.stats import entropy
+import matplotlib.pyplot as plt
+import os
+import pickle
+
+
+def save_comparison_data(filepath, predictions, targets, masks_txt, masks_au, masks_vi):
+    """
+    Saves predictions, targets, and masks to a pickle file.
+
+    Args:
+        filepath (str): Path to save the pickle file.
+        predictions (torch.Tensor): Model predictions.
+        targets (torch.Tensor): Ground truth targets.
+        masks_txt (torch.Tensor): Text masks.
+        masks_au (torch.Tensor): Audio masks.
+        masks_vi (torch.Tensor): Visual masks.
+    """
+    data = {
+        'predictions': predictions.cpu().numpy(),
+        'targets': targets.cpu().numpy(),
+        'masks_txt': masks_txt.cpu().numpy(),
+        'masks_au': masks_au.cpu().numpy(),
+        'masks_vi': masks_vi.cpu().numpy(),
+    }
+    with open(filepath, 'wb') as f:
+        pickle.dump(data, f)
+    print(f"Comparison data saved to {filepath}")
+
+def load_comparison_data(filepath):
+    """
+    Loads predictions, targets, and masks from a pickle file.
+
+    Args:
+        filepath (str): Path to the pickle file.
+
+    Returns:
+        dict: Dictionary containing predictions, targets, and masks.
+    """
+    with open(filepath, 'rb') as f:
+        data = pickle.load(f)
+    print(f"Comparison data loaded from {filepath}")
+    return data
+
+# mosei_metrics.py
+
+def calculate_mask_metrics(mask1, mask2):
+    """
+    Calculates MAE, MSE, Cosine Similarity, and KL-Divergence between two masks.
+
+    Args:
+        mask1 (numpy.ndarray): First mask array.
+        mask2 (numpy.ndarray): Second mask array.
+
+    Returns:
+        dict: Dictionary containing the calculated metrics.
+    """
+    metrics = {}
+    
+    # Ensure masks are flattened for comparison
+    mask1_flat = mask1.flatten()
+    mask2_flat = mask2.flatten()
+    
+    # Mean Absolute Error
+    mae = np.mean(np.abs(mask1_flat - mask2_flat))
+    metrics['MAE'] = mae
+    
+    # Mean Squared Error
+    mse = np.mean((mask1_flat - mask2_flat) ** 2)
+    metrics['MSE'] = mse
+    
+    # Cosine Similarity
+    cos_sim = 1 - cosine(mask1_flat, mask2_flat)
+    metrics['Cosine_Similarity'] = cos_sim
+    
+    # KL-Divergence
+    # Add a small epsilon to avoid division by zero and log(0)
+    epsilon = 1e-10
+    mask1_probs = mask1_flat + epsilon
+    mask2_probs = mask2_flat + epsilon
+    mask1_probs /= np.sum(mask1_probs)
+    mask2_probs /= np.sum(mask2_probs)
+    kl_div = entropy(mask1_probs, mask2_probs)
+    metrics['KL_Divergence'] = kl_div
+    
+    return metrics
+
+def compare_masks(data_new, data_comparison, modality='txt'):
+    """
+    Compares masks between two datasets for a specific modality.
+
+    Args:
+        data_new (dict): Dictionary containing 'masks_txt', 'masks_au', or 'masks_vi'.
+        data_comparison (dict): Dictionary containing 'masks_txt', 'masks_au', or 'masks_vi'.
+        modality (str): 'txt', 'au', or 'vi'.
+
+    Returns:
+        dict: Dictionary containing average metrics and per mask metrics.
+    """
+    metrics_all = {}
+    
+    mask_new = data_new[f'masks_{modality}']
+    mask_comparison = data_comparison[f'masks_{modality}']
+    
+    num_masks = mask_new.shape[1]  # Assuming mask shape is (num_samples, num_masks_per_sample)
+    
+    # Calculate average value per mask position
+    avg_new = np.mean(mask_new, axis=0)
+    avg_comparison = np.mean(mask_comparison, axis=0)
+    avg_diff = avg_new - avg_comparison
+    metrics_all['Average_Value_New'] = avg_new
+    metrics_all['Average_Value_Comparison'] = avg_comparison
+    metrics_all['Average_Value_Difference'] = avg_diff
+    
+    # Initialize lists to store per mask metrics
+    mae_list = []
+    mse_list = []
+    cos_sim_list = []
+    kl_div_list = []
+    
+    for i in range(num_masks):
+        mask1 = mask_new[:, i]
+        mask2 = mask_comparison[:, i]
+        mask_metrics = calculate_mask_metrics(mask1, mask2)
+        mae_list.append(mask_metrics['MAE'])
+        mse_list.append(mask_metrics['MSE'])
+        cos_sim_list.append(mask_metrics['Cosine_Similarity'])
+        kl_div_list.append(mask_metrics['KL_Divergence'])
+    
+    # Calculate average metrics across all mask positions
+    metrics_all['Average_MAE'] = np.mean(mae_list)
+    metrics_all['Average_MSE'] = np.mean(mse_list)
+    metrics_all['Average_Cosine_Similarity'] = np.mean(cos_sim_list)
+    metrics_all['Average_KL_Divergence'] = np.mean(kl_div_list)
+    
+    # Calculate per target output average (assuming 'target' refers to mask positions)
+    metrics_all['Per_Mask_MAE'] = mae_list
+    metrics_all['Per_Mask_MSE'] = mse_list
+    metrics_all['Per_Mask_Cosine_Similarity'] = cos_sim_list
+    metrics_all['Per_Mask_KL_Divergence'] = kl_div_list
+    
+    return metrics_all
+
+def plot_target_histogram(targets_new, targets_comparison, output_path):
+    """
+    Plots histograms of targets for two datasets.
+
+    Args:
+        targets_new (numpy.ndarray): Targets from the new dataset.
+        targets_comparison (numpy.ndarray): Targets from the comparison dataset.
+        output_path (str): Path to save the histogram image.
+    """
+    plt.figure(figsize=(10, 6))
+    plt.hist(targets_new, bins=7, alpha=0.5, label='New Data', color='blue', edgecolor='black')
+    plt.hist(targets_comparison, bins=7, alpha=0.5, label='Comparison Data', color='orange', edgecolor='black')
+    plt.title('Histogram of Targets')
+    plt.xlabel('Target Value')
+    plt.ylabel('Frequency')
+    plt.legend()
+    plt.grid(axis='y', alpha=0.75)
+    plt.savefig(output_path)
+    plt.close()
+    print(f"Histogram of targets saved to {output_path}")
 
 
 def multiclass_acc(preds, truths):

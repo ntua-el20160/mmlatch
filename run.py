@@ -281,16 +281,25 @@ if __name__ == "__main__":
             device=C["device"],
             
         )
+        #UPDATE MASK INDEX HERE IF NEEDED
+        #trainer.set_mask_index(1)
+        predictions, targets,masks_txt,masks_au,masks_vi = trainer.predict(test_loader)
 
-        predictions, targets = trainer.predict(test_loader)
-
+        # insert code to load
         pred = torch.cat(predictions)
         y_test = torch.cat(targets)
-
+ 
         import uuid
 
-        from mmlatch.mosei_metrics import (eval_mosei_senti, print_metrics,
-                                           save_metrics)
+        from mmlatch.mosei_metrics import (
+        eval_mosei_senti,
+        print_metrics,
+        save_metrics,
+        save_comparison_data,  # Newly added
+        load_comparison_data,  # Newly added
+        compare_masks,         # Newly added if needed
+        plot_target_histogram   # Newly added
+        )
 
         metrics = eval_mosei_senti(pred, y_test, True)
         print_metrics(metrics)
@@ -301,3 +310,7 @@ if __name__ == "__main__":
         results_file = os.path.join(results_dir, fname)
 
         save_metrics(metrics, results_file)
+
+        comparison_filename = f"comparison_mask_{fname}.pkl"
+        comparison_filepath = os.path.join(results_dir, comparison_filename)
+        save_comparison_data(comparison_filepath, pred, y_test, masks_txt, masks_au, masks_vi)

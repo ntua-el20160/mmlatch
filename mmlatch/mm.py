@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 from mmlatch.attention import Attention, SymmetricAttention
 from mmlatch.rnn import RNN, AttentiveRNN
-
+import random
 
 class FeedbackUnit(nn.Module):
     """Applies the mask to the input. Either a learnable static mask or a learnable sequence mask"""
@@ -21,6 +21,7 @@ class FeedbackUnit(nn.Module):
         self.mask_type = mask_type
         self.mod1_sz = mod1_sz
         self.hidden_dim = hidden_dim
+        self.mask_index = mask_index
 
         if mask_type == "learnable_sequence_mask":#if the mask is learnable sequence mask, initialize two RNNs
             self.mask1 = RNN(hidden_dim, mod1_sz, dropout=dropout, device=device)
@@ -36,7 +37,7 @@ class FeedbackUnit(nn.Module):
 
         self.get_mask = mask_fn[self.mask_type] #get the mask function based on the mask type
 
-    def _learnable_sequence_mask(self, y, z, lengths=None, mask_index = 1):
+    def _learnable_sequence_mask(self, y, z, lengths=None, mask_index = 1,used_y = True,used_z = True):
         """EDITS HERE !!!!!"""
         """Generates a dynamic, per-timestep mask based on the feedback from inputs y and z"""
         """Mask index:
@@ -50,8 +51,11 @@ class FeedbackUnit(nn.Module):
         oz, _, _ = self.mask2(z, lengths)
         mask1 = torch.sigmoid(oy)
         mask2 = torch.sigmoid(oz)
-
-        if self.mask_index == 1 or self.mask_index == 4:
+        if(used_y == False):
+            mask =mask2
+        elif(used_z == False):
+            mask = mask1
+        elif self.mask_index == 1 or self.mask_index == 4:
             mask = (mask1 + mask2) * 0.5
         elif self.mask_index == 2:
             mask = torch.max(mask1, mask2)
@@ -67,17 +71,21 @@ class FeedbackUnit(nn.Module):
 
         #mask = lg
 
-        return mask
+        return mask,mask1
 
     #def _learnable_static_mask(self, y, z, lengths=None):
-    def _learnable_static_mask(self, y, z, lengths=None):
+    def _learnable_static_mask(self, y, z, lengths=None,used_y = True,used_z = True):
         """Generates a static mask based on the feedback from inputs y and z"""
         y = self.mask1(y)
         z = self.mask2(z)
         mask1 = torch.sigmoid(y)
         mask2 = torch.sigmoid(z)
         #mask = (mask1 + mask2) * 0.5
-        if self.mask_index == 1 or self.mask_index == 4:
+        if(used_y == False):
+            mask =mask2
+        elif(used_z == False):
+            mask = mask1
+        elif self.mask_index == 1 or self.mask_index == 4:
             mask = (mask1 + mask2) * 0.5
         elif self.mask_index == 2:
             mask = torch.max(mask1, mask2)
@@ -90,7 +98,7 @@ class FeedbackUnit(nn.Module):
         else:
             raise ValueError("Invalid mask_index. Must be between 1 and 5.")
 
-        return mask
+        return mask,mask1
     def set_mask_index(self, new_mask_index):
         """
         Updates the mask_index to a new value.
@@ -104,13 +112,14 @@ class FeedbackUnit(nn.Module):
 
     def forward(self, x, y, z, lengths=None):
         """Applies the mask to the modality x based on the feedback from y and z"""
-        mask = self.get_mask(y, z, lengths=lengths)
+        mask,mask1 = self.get_mask(y, z, lengths=lengths)
         mask = F.dropout(mask, p=0.2) #apply dropout to the mask
         if(self.mask_index == 4): # add the residual part after dropout
-            mask = mask+1
-        x_new = x * mask
+            x_new = (x *( mask+1))
+        else:
+            x_new = x * mask
 
-        return x_new
+        return x_new,mask1
 
 
 class Feedback(nn.Module):
@@ -164,11 +173,16 @@ class Feedback(nn.Module):
         self.f3.set_mask_index(new_mask_index)
     def forward(self, low_x, low_y, low_z, hi_x, hi_y, hi_z, lengths=None):
         """Applies the feedback mechanism across three modalities"""
-        x = self.f1(low_x, hi_y, hi_z, lengths=lengths)
-        y = self.f2(low_y, hi_x, hi_z, lengths=lengths)
-        z = self.f3(low_z, hi_x, hi_y, lengths=lengths)
+        used =[True,True,True]
+        if random.random() < 0.2:# Mask-Dropout 20% chance to drop one of the 3
+            used[random.randint(0,2)] =False
 
-        return x, y, z
+
+        x,masky = self.f1(low_x, hi_y, hi_z, lengths=lengths,used_y = used[1],used_z = used[2])
+        y,maskz = self.f2(low_y, hi_z, hi_x, lengths=lengths,used_y = used[2],used_z = used[0])
+        z,maskx = self.f3(low_z, hi_x, hi_y, lengths=lengths,used_y = used[0],used_z = used[1])
+
+        return x, y, z,maskx,masky,maskz
 
 
 class AttentionFuser(nn.Module):
@@ -562,6 +576,16 @@ class AVTEncoder(nn.Module):
         vi = self.visual(vi, lengths)
 
         return txt, au, vi
+    
+    def set_mask_index(self, new_mask_index):
+        """
+        Updates the mask_index for all FeedbackUnit instances.
+        
+        Args:
+            new_mask_index (int): New mask index value (1 to 5).
+        """
+        self.fm.set_mask_index(new_mask_index)
+        
 
     def _fuse(self, txt, au, vi, lengths):
         fused = self.fuser(txt, au, vi, lengths)
@@ -571,12 +595,12 @@ class AVTEncoder(nn.Module):
     def forward(self, txt, au, vi, lengths):
         if self.feedback:
             txt1, au1, vi1 = self._encode(txt, au, vi, lengths)
-            txt, au, vi = self.fm(txt, au, vi, txt1, au1, vi1, lengths=lengths)
+            txt, au, vi,mask_txt,mask_au,mask_vi = self.fm(txt, au, vi, txt1, au1, vi1, lengths=lengths)
 
         txt, au, vi = self._encode(txt, au, vi, lengths)
         fused = self._fuse(txt, au, vi, lengths)
 
-        return fused
+        return fused,mask_txt,mask_au,mask_vi
 
 
 class AVTClassifier(nn.Module):
@@ -622,9 +646,17 @@ class AVTClassifier(nn.Module):
 
         self.classifier = nn.Linear(self.encoder.out_size, num_classes)
 
+    def set_mask_index(self, new_mask_index):
+        """
+        Updates the mask_index for all FeedbackUnit instances.
+        
+        Args:
+            new_mask_index (int): New mask index value (1 to 5).
+        """
+        self.encoder.set_mask_index(new_mask_index)
     def forward(self, inputs):
-        out = self.encoder(
+        out,mask_txt,mask_au,mask_vi = self.encoder(
             inputs["text"], inputs["audio"], inputs["visual"], inputs["lengths"]
         )
 
-        return self.classifier(out)
+        return self.classifier(out),mask_txt,mask_au,mask_vi
