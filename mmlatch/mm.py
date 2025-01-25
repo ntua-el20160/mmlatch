@@ -37,7 +37,7 @@ class FeedbackUnit(nn.Module):
 
         self.get_mask = mask_fn[self.mask_type] #get the mask function based on the mask type
 
-    def _learnable_sequence_mask(self, y, z, lengths=None, mask_index = 1,used_y = True,used_z = True):
+    def _learnable_sequence_mask(self, y, z, lengths=None,used_y = True,used_z = True):
         """EDITS HERE !!!!!"""
         """Generates a dynamic, per-timestep mask based on the feedback from inputs y and z"""
         """Mask index:
@@ -110,9 +110,9 @@ class FeedbackUnit(nn.Module):
             raise ValueError("mask_index must be an integer between 1 and 5.")
         self.mask_index = new_mask_index
 
-    def forward(self, x, y, z, lengths=None):
+    def forward(self, x, y, z, lengths=None,used_y = True,used_z = True):
         """Applies the mask to the modality x based on the feedback from y and z"""
-        mask,mask1 = self.get_mask(y, z, lengths=lengths)
+        mask,mask1 = self.get_mask(y, z, lengths=lengths,used_y=used_y,used_z=used_z)
         mask = F.dropout(mask, p=0.2) #apply dropout to the mask
         if(self.mask_index == 4): # add the residual part after dropout
             x_new = (x *( mask+1))
