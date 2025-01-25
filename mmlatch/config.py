@@ -283,14 +283,14 @@ def augment_parser(parser):
         default=None,
         help="Resume optimizer",
     )
-    parser.add_argument(
-        "--mask-index",
-        dest="model.mask_index",
-        type=int,
-        default=1,
-        choices=[1, 2, 3, 4, 5],
-        help="Masking strategy index (1: average, 2: max, 3: min, 4: residual, 5: max deviation from 0.5)",
-    )
+    # parser.add_argument(
+    #     "--mask-index",
+    #     dest="model.mask_index",
+    #     type=int,
+    #     default=1,
+    #     choices=[1, 2, 3, 4, 5],
+    #     help="Masking strategy index (1: average, 2: max, 3: min, 4: residual, 5: max deviation from 0.5)",
+    # )
 
     return parser
 
