@@ -295,10 +295,11 @@ if __name__ == "__main__":
         eval_mosei_senti,
         print_metrics,
         save_metrics,
-        save_comparison_data,  # Newly added
-        load_comparison_data,  # Newly added
+        save_comparison_data_pickle,  # Newly added
         compare_masks,         # Newly added if needed
-        plot_target_histogram   # Newly added
+        prediction_count,   # Newly added
+        plot_masks,         # Newly added if needed
+        save_histogram_data
         )
 
         metrics = eval_mosei_senti(pred, y_test, True)
@@ -308,9 +309,42 @@ if __name__ == "__main__":
         safe_mkdirs(results_dir)
         fname = uuid.uuid1().hex
         results_file = os.path.join(results_dir, fname)
-
+        fname2 = fname + "_masks"
+        results_file2 = os.path.join(results_dir, fname2)
         save_metrics(metrics, results_file)
 
-        comparison_filename = f"comparison_mask_{fname}.pkl"
+        comparison_filename = f"comparison_mask.pkl"
         comparison_filepath = os.path.join(results_dir, comparison_filename)
-        save_comparison_data(comparison_filepath, pred, y_test, masks_txt, masks_au, masks_vi)
+        #save_comparison_data_pickle(comparison_filepath, pred, y_test, masks_txt, masks_au, masks_vi)
+
+        data = {
+    'predictions': pred.cpu().numpy(),      # Removed torch.cat
+    'targets': y_test.cpu().numpy(),        # Removed torch.cat
+    'masks_txt': [mask.cpu().numpy() for mask in masks_txt],
+    'masks_au': [mask.cpu().numpy() for mask in masks_au],
+    'masks_vi': [mask.cpu().numpy() for mask in masks_vi],
+}
+
+        avg_metrics,mean_mask_new,diff_mask,mean_mask_new_target,diff_mask_target = compare_masks(data,comparison_filepath)
+        save_metrics(avg_metrics, results_file2)
+        experiment_name = C["experiment"]["name"]
+
+        plot_masks(mean_mask_new, f'Mean_Mask_{experiment_name}', save_directory=results_dir)
+
+        # Plot and save diff_mean_mask_new
+        plot_masks(diff_mask, f'Difference_Of_Mean_With_Default_{experiment_name}', save_directory=results_dir)
+
+        # Plot and save mean_mask_new_target
+        plot_masks(mean_mask_new_target, f'Mean_Mask_{experiment_name}', save_directory=results_dir)
+
+        # Plot and save diff_mean_mask_new_target
+        plot_masks(diff_mask_target, f'Difference_Of_Mean_With_Default_{experiment_name}', save_directory=results_dir)
+
+        predictions_distr_new,predictions_distr_comparison,targets_distr =prediction_count(data, comparison_filepath)
+
+        save_histogram_data(predictions_distr_new, predictions_distr_comparison, targets_distr, results_dir, experiment_name)
+
+
+
+                
+

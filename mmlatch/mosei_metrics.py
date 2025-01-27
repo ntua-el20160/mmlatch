@@ -11,30 +11,36 @@ import os
 import pickle
 
 
-def save_comparison_data(filepath, predictions, targets, masks_txt, masks_au, masks_vi):
+import torch
+
+import pickle
+import torch
+
+def save_comparison_data_pickle(filepath, predictions, targets, masks_txt, masks_au, masks_vi):
     """
     Saves predictions, targets, and masks to a pickle file.
 
     Args:
         filepath (str): Path to save the pickle file.
-        predictions (torch.Tensor): Model predictions.
-        targets (torch.Tensor): Ground truth targets.
-        masks_txt (torch.Tensor): Text masks.
-        masks_au (torch.Tensor): Audio masks.
-        masks_vi (torch.Tensor): Visual masks.
+        predictions (List[torch.Tensor]): Model predictions.
+        targets (List[torch.Tensor]): Ground truth targets.
+        masks_txt (List[torch.Tensor]): Text masks.
+        masks_au (List[torch.Tensor]): Audio masks.
+        masks_vi (List[torch.Tensor]): Visual masks.
     """
     data = {
-        'predictions': predictions.cpu().numpy(),
-        'targets': targets.cpu().numpy(),
-        'masks_txt': masks_txt.cpu().numpy(),
-        'masks_au': masks_au.cpu().numpy(),
-        'masks_vi': masks_vi.cpu().numpy(),
+        'predictions': torch.cat(predictions, dim=0).cpu().numpy(),  # Concatenate if applicable
+        'targets': torch.cat(targets, dim=0).cpu().numpy(),          # Concatenate if applicable
+        'masks_txt': [mask.cpu().numpy() for mask in masks_txt],     # List of NumPy arrays
+        'masks_au': [mask.cpu().numpy() for mask in masks_au],       # List of NumPy arrays
+        'masks_vi': [mask.cpu().numpy() for mask in masks_vi],       # List of NumPy arrays
     }
     with open(filepath, 'wb') as f:
         pickle.dump(data, f)
     print(f"Comparison data saved to {filepath}")
 
-def load_comparison_data(filepath):
+
+def load_comparison_data_pickle(filepath):
     """
     Loads predictions, targets, and masks from a pickle file.
 
@@ -42,12 +48,21 @@ def load_comparison_data(filepath):
         filepath (str): Path to the pickle file.
 
     Returns:
-        dict: Dictionary containing predictions, targets, and masks.
+        dict: A dictionary containing predictions, targets, and masks.
     """
     with open(filepath, 'rb') as f:
         data = pickle.load(f)
-    print(f"Comparison data loaded from {filepath}")
     return data
+
+# Usage
+#data = load_comparison_data_pickle('comparison_data.pkl')
+#predictions = data['predictions']
+#targets = data['targets']
+#masks_txt = data['masks_txt']
+#masks_au = data['masks_au']
+#masks_vi = data['masks_vi']
+
+
 
 # mosei_metrics.py
 
@@ -92,82 +107,185 @@ def calculate_mask_metrics(mask1, mask2):
     
     return metrics
 
-def compare_masks(data_new, data_comparison, modality='txt'):
+def compare_masks(data_new, data_comparison_link):
+    """Function to compare masks between two models."""
+    metrics_all = {} #stores each of the 4 metrics per modality
+   
+    #seperates the masks by the target that their input should have been
+    masks_per_target_new = {}
+    masks_per_target_comp = {}
+
+    #mean value of masks (2d array) per modality
+    mean_mask_new = {}
+
+    #the difference of mean between the new data to the comparison data per modality 
+    diff_mean_mask_new = {}
+
+    #similarly to before but grouped per target
+    mean_mask_new_target = {}
+    diff_mean_mask_new_target = {}
+
+    targets = data_new['targets']
+    data = load_comparison_data_pickle(data_comparison_link)
+
+    for modality in ["txt", "au", "vi"]:
+        print(f"Comparing masks for modality '{modality}'")
+
+        #get the masks for the new data and the comparison data
+        mask_new = data_new.get(f'masks_{modality}', [])
+        mask_comparison = data.get(f'masks_{modality}', [])
+
+
+        # Check if both mask lists have the same length
+        if len(mask_new) != len(mask_comparison):
+            raise ValueError(
+            f"Number of masks for modality '{modality}' does not match between datasets. "
+            f"data_new has {len(mask_new)} masks, "
+            f"data_comparison has {len(mask_comparison)} masks."
+        )
+
+        for i in range(len(mask_new)):
+            #calculate the metrics for each mask
+            mask_metrics = calculate_mask_metrics(mask_new[i], mask_comparison[i])
+            
+            # store the metrics for each mask
+            for metric_name, metric_value in mask_metrics.items():
+                key = f'{modality}_{metric_name}'
+                if key not in metrics_all:
+                    metrics_all[key] = []
+                metrics_all[key].append(metric_value) 
+            
+            # Organize the new and comparison masks per target
+            key_target = f'{modality}_{targets[i]}'
+
+            # Initialize lists if keys do not exist
+            if key_target not in masks_per_target_new:
+                masks_per_target_new[key_target] = []
+            if key_target not in masks_per_target_comp:
+                masks_per_target_comp[key_target] = []
+
+            masks_per_target_new[key_target].append(mask_new[i])
+            masks_per_target_comp[key_target].append(mask_comparison[i])
+
+        # Compute the mean and difference mask for this modality
+        mean_mask_new[modality] = np.mean(mask_new, axis=0)
+        diff_mean_mask_new[modality] = np.mean(mask_new, axis=0) - np.mean(mask_comparison, axis=0)
+
+    # the mean and difference mask for this modality per target
+    for key,value in masks_per_target_new.items():
+        mean_mask_new_target[key] = np.mean(value, axis=0)
+        diff_mean_mask_new_target[key] = np.mean(value, axis=0) - np.mean(masks_per_target_comp[key], axis=0)
+    
+    average_metrics = {key: np.mean(values) for key, values in metrics_all.items()}
+
+        
+    return average_metrics,mean_mask_new,diff_mean_mask_new,mean_mask_new_target,diff_mean_mask_new_target
+    
+import numpy as np
+import matplotlib.pyplot as plt
+import pickle
+import os
+from typing import Dict, Any
+
+def plot_masks(mask_dict,description,save_directory):
+
+    # Create the save directory if it doesn't exist
+    os.makedirs(save_directory, exist_ok=True)
+
+    for key, mask in mask_dict.items():
+        # Plotting the mask
+        plt.figure(figsize=(6, 5))
+        plt.imshow(mask, cmap='viridis', aspect='auto')
+        plt.colorbar()
+        
+        # Split the key to extract modality and target if applicable
+        if '_' in key:
+            modality, target = key.split('_', 1)
+            title = f"{description.replace('_', ' ').capitalize()} - Modality: {modality}, Target: {target}"
+        else:
+            modality = key
+            title = f"{description.replace('_', ' ').capitalize()} - Modality: {modality}"
+        
+        plt.title(title)
+        plt.xlabel('X-axis')
+        plt.ylabel('Y-axis')
+        plt.tight_layout()
+        plt.show()  # Display the plot
+
+    # Save the mask dictionary using pickle
+    save_path = os.path.join(save_directory, f"{description}.pkl")
+    with open(save_path, 'wb') as f:
+        pickle.dump(mask_dict, f)
+    print(f"Mask data saved to {save_path}")
+
+
+def prediction_count(data_new, data_comparison_link):
+    
+    data = load_comparison_data_pickle(data_comparison_link)
+    predictions_new = data_new['predictions']
+    predictions_comparison = data['predictions']
+    targets = data_new['targets']
+    predictions_distr_new = {}
+    predictions_distr_comparison = {}
+    targets_distr = {}
+    for i in range(1,8):
+        predictions_distr_new[i] = 0
+        predictions_distr_comparison[i] = 0
+        targets_distr[i] = 0
+    
+
+    for i in range(len(predictions_new)):
+        targets_distr[targets[i]] += 1
+        predictions_distr_new[predictions_new[i]] += 1
+        predictions_distr_comparison[predictions_comparison[i]] += 1
+    return predictions_distr_new,predictions_distr_comparison,targets_distr
+
+import matplotlib.pyplot as plt
+import pickle
+import os
+from typing import Dict
+
+def save_histogram_data(predictions_distr_new,predictions_distr_comparison,targets_distr,save_directory,experiment_name):
     """
-    Compares masks between two datasets for a specific modality.
+    Plots histograms for prediction distributions and saves the distribution dictionaries.
 
     Args:
-        data_new (dict): Dictionary containing 'masks_txt', 'masks_au', or 'masks_vi'.
-        data_comparison (dict): Dictionary containing 'masks_txt', 'masks_au', or 'masks_vi'.
-        modality (str): 'txt', 'au', or 'vi'.
-
-    Returns:
-        dict: Dictionary containing average metrics and per mask metrics.
+        predictions_distr_new (Dict[int, int]): Distribution of new predictions.
+        predictions_distr_comparison (Dict[int, int]): Distribution of comparison predictions.
+        targets_distr (Dict[int, int]): Distribution of targets.
+        save_directory (str): Directory where distribution data will be saved.
     """
-    metrics_all = {}
-    
-    mask_new = data_new[f'masks_{modality}']
-    mask_comparison = data_comparison[f'masks_{modality}']
-    
-    num_masks = mask_new.shape[1]  # Assuming mask shape is (num_samples, num_masks_per_sample)
-    
-    # Calculate average value per mask position
-    avg_new = np.mean(mask_new, axis=0)
-    avg_comparison = np.mean(mask_comparison, axis=0)
-    avg_diff = avg_new - avg_comparison
-    metrics_all['Average_Value_New'] = avg_new
-    metrics_all['Average_Value_Comparison'] = avg_comparison
-    metrics_all['Average_Value_Difference'] = avg_diff
-    
-    # Initialize lists to store per mask metrics
-    mae_list = []
-    mse_list = []
-    cos_sim_list = []
-    kl_div_list = []
-    
-    for i in range(num_masks):
-        mask1 = mask_new[:, i]
-        mask2 = mask_comparison[:, i]
-        mask_metrics = calculate_mask_metrics(mask1, mask2)
-        mae_list.append(mask_metrics['MAE'])
-        mse_list.append(mask_metrics['MSE'])
-        cos_sim_list.append(mask_metrics['Cosine_Similarity'])
-        kl_div_list.append(mask_metrics['KL_Divergence'])
-    
-    # Calculate average metrics across all mask positions
-    metrics_all['Average_MAE'] = np.mean(mae_list)
-    metrics_all['Average_MSE'] = np.mean(mse_list)
-    metrics_all['Average_Cosine_Similarity'] = np.mean(cos_sim_list)
-    metrics_all['Average_KL_Divergence'] = np.mean(kl_div_list)
-    
-    # Calculate per target output average (assuming 'target' refers to mask positions)
-    metrics_all['Per_Mask_MAE'] = mae_list
-    metrics_all['Per_Mask_MSE'] = mse_list
-    metrics_all['Per_Mask_Cosine_Similarity'] = cos_sim_list
-    metrics_all['Per_Mask_KL_Divergence'] = kl_div_list
-    
-    return metrics_all
+    import os
 
-def plot_target_histogram(targets_new, targets_comparison, output_path):
-    """
-    Plots histograms of targets for two datasets.
+    # Create the save directory if it doesn't exist
+    os.makedirs(save_directory, exist_ok=True)
 
-    Args:
-        targets_new (numpy.ndarray): Targets from the new dataset.
-        targets_comparison (numpy.ndarray): Targets from the comparison dataset.
-        output_path (str): Path to save the histogram image.
-    """
-    plt.figure(figsize=(10, 6))
-    plt.hist(targets_new, bins=7, alpha=0.5, label='New Data', color='blue', edgecolor='black')
-    plt.hist(targets_comparison, bins=7, alpha=0.5, label='Comparison Data', color='orange', edgecolor='black')
-    plt.title('Histogram of Targets')
-    plt.xlabel('Target Value')
-    plt.ylabel('Frequency')
-    plt.legend()
-    plt.grid(axis='y', alpha=0.75)
-    plt.savefig(output_path)
-    plt.close()
-    print(f"Histogram of targets saved to {output_path}")
+    # Define the bins (assuming predictions and targets are integers from 1 to 7)
+    bins = range(1, 9)  # To include 7 as the last bin
+
+    # Plotting New Predictions
+    plt.figure(figsize=(8, 6))
+    plt.hist(predictions_distr_new.keys(), bins=bins, weights=predictions_distr_new.values(), alpha=0.5, label='New Predictions', color='blue', edgecolor='black')
+    plt.hist(predictions_distr_comparison.keys(), bins=bins, weights=predictions_distr_comparison.values(), alpha=0.5, label='Comparison Predictions', color='green', edgecolor='black')
+    plt.hist(targets_distr.keys(), bins=bins, weights=targets_distr.values(), alpha=0.5, label='Targets', color='red', edgecolor='black')
+    plt.xlabel('Prediction/Target Class')
+    plt.ylabel('Count')
+    plt.title('Prediction and Target Distributions')
+    plt.legend(loc='upper right')
+    plt.xticks(bins[:-1])  # Set x-ticks to class labels
+    plt.tight_layout()
+    plt.show()  # Display the histogram
+
+    # Save the distribution dictionaries using pickle
+    distribution_data = {
+        'predictions_distr_new': predictions_distr_new,
+        'predictions_distr_comparison': predictions_distr_comparison,
+        'targets_distr': targets_distr
+    }
+    save_path = os.path.join(save_directory, f"prediction_target_distributions_{experiment_name}.pkl")
+    with open(save_path, 'wb') as f:
+        pickle.dump(distribution_data, f)
+    print(f"Histogram distribution data saved to {save_path}")
 
 
 def multiclass_acc(preds, truths):
