@@ -325,21 +325,32 @@ if __name__ == "__main__":
     'masks_vi': [mask.cpu().numpy() for mask in masks_vi],
 }
 
-        avg_metrics,mean_mask_new,diff_mask,mean_mask_new_target,diff_mask_target = compare_masks(data,comparison_filepath)
+        avg_metrics, mean_mask_mod_target, diff_mask_mod_target = compare_masks(data, comparison_filepath)
+
+        # Print average metrics
+        print_metrics(avg_metrics)
+
+        # Save the metrics
         save_metrics(avg_metrics, results_file2)
+
+        # Retrieve experiment name for labeling
         experiment_name = C["experiment"]["name"]
 
-        plot_masks(mean_mask_new, f'Mean_Mask_{experiment_name}', save_directory=results_dir)
-
-        # Plot and save diff_mean_mask_new
-        plot_masks(diff_mask, f'Difference_Of_Mean_With_Default_{experiment_name}', save_directory=results_dir)
-
-        # Plot and save mean_mask_new_target
-        plot_masks(mean_mask_new_target, f'Mean_Mask_{experiment_name}', save_directory=results_dir)
-
-        # Plot and save diff_mean_mask_new_target
-        plot_masks(diff_mask_target, f'Difference_Of_Mean_With_Default_{experiment_name}', save_directory=results_dir)
-
+        # Plot and save masks for each modality
+        for modality in ["txt", "au", "vi"]:
+            # Plot and save mean masks
+            plot_masks(
+                mean_mask_mod_target[modality],
+                f'Mean_{modality}_Target_{experiment_name}',
+                save_directory=results_dir,
+                title=f"Averaged {modality} Masks and Target for {experiment_name}",
+            )
+            plot_masks(
+                diff_mask_mod_target[modality],
+                f'Difference_{modality}_Target_{experiment_name}',
+                save_directory=results_dir,
+                title=f"Difference of {modality} Averaged Masks with Default Per Target for {experiment_name}",
+            )
         predictions_distr_new,predictions_distr_comparison,targets_distr =prediction_count(data, comparison_filepath)
 
         save_histogram_data(predictions_distr_new, predictions_distr_comparison, targets_distr, results_dir, experiment_name)

@@ -123,8 +123,7 @@ def compare_masks(data_new, data_comparison_link):
 
     #similarly to before but grouped per target
     mean_mask_new_target = {}
-    diff_mean_mask_new_target = {}
-    
+    diff_mean_mask_new_target = {}    
 
     targets = data_new['targets']
     data = load_comparison_data_pickle(data_comparison_link)
@@ -133,6 +132,8 @@ def compare_masks(data_new, data_comparison_link):
         print(f"Comparing masks for modality '{modality}'")
         masks_transformed_comp = []
         masks_transformed_new = []
+        dict_temp = {}
+        dict_temp_comp = {}
 
         #get the masks for the new data and the comparison data
         mask_new = data_new.get(f'masks_{modality}', [])
@@ -158,35 +159,61 @@ def compare_masks(data_new, data_comparison_link):
                     metrics_all[key] = []
                 metrics_all[key].append(metric_value) 
             
-            # Organize the new and comparison masks per target
-            key_target = f'{modality}_{targets[i]}'
+            
 
             # Initialize lists if keys do not exist
-            if key_target not in masks_per_target_new:
-                masks_per_target_new[key_target] = []
-            if key_target not in masks_per_target_comp:
-                masks_per_target_comp[key_target] = []
             
+            if targets[i] not in dict_temp:
+               dict_temp[targets[i]] = []
+            if targets[i] not in dict_temp_comp:
+                dict_temp_comp[targets[i]] = []
+            
+            #flatten them to the feature dimension
             mask_flat_new = np.mean(mask_new[i], axis=(0, 1))
             mask_flat_comp = np.mean(mask_comparison[i], axis=(0, 1))
+
+            #append the flattened masks to the list for mean per modality
             masks_transformed_new.append(mask_flat_new)
             masks_transformed_comp.append(mask_flat_comp)
-            masks_per_target_new[key_target].append(mask_flat_new)
-            masks_per_target_comp[key_target].append(mask_flat_comp)
+            #append the flattened masks to the list for mean per modality per target
+            dict_temp[targets[i]].append(mask_flat_new)
+            dict_temp_comp[targets[i]].append(mask_flat_comp)
 
         # Compute the mean and difference mask for this modality
+        masks_per_target_comp[modality] = dict_temp_comp
+        masks_per_target_new[modality] = dict_temp
         mean_mask_new[modality] = np.mean(masks_transformed_new, axis=0)
         diff_mean_mask_new[modality] = np.mean(masks_transformed_new, axis=0) - np.mean(masks_transformed_comp, axis=0)
 
     # the mean and difference mask for this modality per target
+    for modality, target_dict in masks_per_target_new.items():
+        if modality not in mean_mask_new_target:
+            mean_mask_new_target[modality] = {}
+            diff_mean_mask_new_target[modality] = {}
+
+        for target, masks_list in target_dict.items():
+            mean_mask_new_target[modality][target] = np.mean(masks_list, axis=0)
+            diff_mean_mask_new_target[modality][target] = (
+                np.mean(masks_list, axis=0)
+                - np.mean(masks_per_target_comp[modality][target], axis=0)
+            )
+
+        # Add overall mean for this modality
+        mean_mask_new_target[modality]["all"] = mean_mask_new[modality]
+        diff_mean_mask_new_target[modality]["all"] = diff_mean_mask_new[modality]
+
     for key,value in masks_per_target_new.items():
+
         mean_mask_new_target[key] = np.mean(value, axis=0)
         diff_mean_mask_new_target[key] = np.mean(value, axis=0) - np.mean(masks_per_target_comp[key], axis=0)
-    
+    for modality in ["txt", "au", "vi"]:
+        mean_mask_new_target[modality]['all'] = mean_mask_new[modality]
+        mean_mask_new_target[modality]['all'] = mean_mask_new[modality]
+
     average_metrics = {key: np.mean(values) for key, values in metrics_all.items()}
 
         
-    return average_metrics,mean_mask_new,diff_mean_mask_new,mean_mask_new_target,diff_mean_mask_new_target
+    return average_metrics,mean_mask_new_target,diff_mean_mask_new_target
     
 import numpy as np
 import matplotlib.pyplot as plt
@@ -194,36 +221,65 @@ import pickle
 import os
 from typing import Dict, Any
 
-def plot_masks(mask_dict,description,save_directory):
+
+def plot_masks(mask_dict, description, save_directory, title=None):
+    """
+    Plots all masks from a dictionary in a single plot.
+
+    Args:
+        mask_dict (dict): Dictionary of masks, where keys are "modality_target" and values are arrays.
+        description (str): Description for the plot and file naming.
+        save_directory (str): Directory to save the resulting plot and data.
+        title (str): Optional custom title for the plot.
+    """
+    import os
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import pickle
 
     # Create the save directory if it doesn't exist
     os.makedirs(save_directory, exist_ok=True)
 
-    for key, mask in mask_dict.items():
-        # Plotting the mask
-        plt.figure(figsize=(6, 5))
-        plt.imshow(mask, cmap='viridis', aspect='auto')
-        plt.colorbar()
-        
-        # Split the key to extract modality and target if applicable
-        if '_' in key:
-            modality, target = key.split('_', 1)
-            title = f"{description.replace('_', ' ').capitalize()} - Modality: {modality}, Target: {target}"
-        else:
-            modality = key
-            title = f"{description.replace('_', ' ').capitalize()} - Modality: {modality}"
-        
-        plt.title(title)
-        plt.xlabel('X-axis')
-        plt.ylabel('Y-axis')
-        plt.tight_layout()
-        plt.show()  # Display the plot
+    # Prepare data for plotting
+    keys = list(mask_dict.keys())  # Keys for the y-axis
+    masks = [mask for mask in mask_dict.values()]  # Extract mask arrays
+    max_features = max(mask.shape[0] for mask in masks)  # Determine the largest feature dimension
+
+    # Normalize all masks to the same length (for visualization)
+    masks_padded = np.zeros((len(masks), max_features))
+    for i, mask in enumerate(masks):
+        masks_padded[i, :mask.shape[0]] = mask  # Pad or keep masks as they are
+
+    # Set up the figure
+    plt.figure(figsize=(12, 8))
+    plt.imshow(masks_padded, cmap='viridis', aspect='auto', extent=[1, max_features, 0, len(keys)])
+    plt.colorbar(label='Mask Values')
+
+    # Set axis labels and ticks
+    plt.xticks(ticks=np.arange(1, max_features + 1), labels=np.arange(1, max_features + 1))  # Dynamic x-axis
+    plt.yticks(ticks=np.arange(len(keys)), labels=keys)  # Keys (modality_target)
+    plt.xlabel('Feature Dimension')
+    plt.ylabel('Modality_Target')
+
+    # Set the title
+    plot_title = title if title else description.replace('_', ' ').capitalize()
+    plt.title(plot_title)
+
+    # Adjust layout and show the plot
+    plt.tight_layout()
+    plt.show()
+
+    # Save the plot as an image
+    plot_path = os.path.join(save_directory, f"{description}.png")
+    plt.savefig(plot_path)
+    print(f"Plot saved to {plot_path}")
 
     # Save the mask dictionary using pickle
     save_path = os.path.join(save_directory, f"{description}.pkl")
     with open(save_path, 'wb') as f:
         pickle.dump(mask_dict, f)
     print(f"Mask data saved to {save_path}")
+
 
 
 def prediction_count(data_new, data_comparison_link):

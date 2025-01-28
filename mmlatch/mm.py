@@ -118,8 +118,8 @@ class FeedbackUnit(nn.Module):
             x_new = (x *( mask+1))
         else:
             x_new = x * mask
-
-        return x_new,mask1
+        #return x_new,mask1
+        return x_new,mask
 
 
 class Feedback(nn.Module):
@@ -178,11 +178,16 @@ class Feedback(nn.Module):
             used[random.randint(0,2)] =False
 
 
-        x,masky = self.f1(low_x, hi_y, hi_z, lengths=lengths,used_y = used[1],used_z = used[2])
-        y,maskz = self.f2(low_y, hi_z, hi_x, lengths=lengths,used_y = used[2],used_z = used[0])
-        z,maskx = self.f3(low_z, hi_x, hi_y, lengths=lengths,used_y = used[0],used_z = used[1])
+        #x,masky = self.f1(low_x, hi_y, hi_z, lengths=lengths,used_y = used[1],used_z = used[2])
+        #y,maskz = self.f2(low_y, hi_z, hi_x, lengths=lengths,used_y = used[2],used_z = used[0])
+        #z,maskx = self.f3(low_z, hi_x, hi_y, lengths=lengths,used_y = used[0],used_z = used[1])
 
-        return x, y, z,maskx,masky,maskz
+        x,mask_to_x = self.f1(low_x, hi_y, hi_z, lengths=lengths,used_y = used[1],used_z = used[2])
+        y,mask_to_y= self.f2(low_y, hi_z, hi_x, lengths=lengths,used_y = used[2],used_z = used[0])
+        z,mask_to_z = self.f3(low_z, hi_x, hi_y, lengths=lengths,used_y = used[0],used_z = used[1])
+
+        #return x, y, z,maskx,masky,maskz
+        return x, y, z,mask_to_x,mask_to_y,mask_to_z
 
 
 class AttentionFuser(nn.Module):
