@@ -29,8 +29,8 @@ def save_comparison_data_pickle(filepath, predictions, targets, masks_txt, masks
         masks_vi (List[torch.Tensor]): Visual masks.
     """
     data = {
-        'predictions': torch.cat(predictions, dim=0).cpu().numpy(),  # Concatenate if applicable
-        'targets': torch.cat(targets, dim=0).cpu().numpy(),          # Concatenate if applicable
+        'predictions': predictions.cpu().numpy(),  # Concatenate if applicable
+        'targets': targets.cpu().numpy(),          # Concatenate if applicable
         'masks_txt': [mask.cpu().numpy() for mask in masks_txt],     # List of NumPy arrays
         'masks_au': [mask.cpu().numpy() for mask in masks_au],       # List of NumPy arrays
         'masks_vi': [mask.cpu().numpy() for mask in masks_vi],       # List of NumPy arrays
@@ -124,12 +124,15 @@ def compare_masks(data_new, data_comparison_link):
     #similarly to before but grouped per target
     mean_mask_new_target = {}
     diff_mean_mask_new_target = {}
+    
 
     targets = data_new['targets']
     data = load_comparison_data_pickle(data_comparison_link)
 
     for modality in ["txt", "au", "vi"]:
         print(f"Comparing masks for modality '{modality}'")
+        masks_transformed_comp = []
+        masks_transformed_new = []
 
         #get the masks for the new data and the comparison data
         mask_new = data_new.get(f'masks_{modality}', [])
@@ -163,13 +166,17 @@ def compare_masks(data_new, data_comparison_link):
                 masks_per_target_new[key_target] = []
             if key_target not in masks_per_target_comp:
                 masks_per_target_comp[key_target] = []
-
-            masks_per_target_new[key_target].append(mask_new[i])
-            masks_per_target_comp[key_target].append(mask_comparison[i])
+            
+            mask_flat_new = np.mean(mask_new[i], axis=(0, 1))
+            mask_flat_comp = np.mean(mask_comparison[i], axis=(0, 1))
+            masks_transformed_new.append(mask_flat_new)
+            masks_transformed_comp.append(mask_flat_comp)
+            masks_per_target_new[key_target].append(mask_flat_new)
+            masks_per_target_comp[key_target].append(mask_flat_comp)
 
         # Compute the mean and difference mask for this modality
-        mean_mask_new[modality] = np.mean(mask_new, axis=0)
-        diff_mean_mask_new[modality] = np.mean(mask_new, axis=0) - np.mean(mask_comparison, axis=0)
+        mean_mask_new[modality] = np.mean(masks_transformed_new, axis=0)
+        diff_mean_mask_new[modality] = np.mean(masks_transformed_new, axis=0) - np.mean(masks_transformed_comp, axis=0)
 
     # the mean and difference mask for this modality per target
     for key,value in masks_per_target_new.items():
