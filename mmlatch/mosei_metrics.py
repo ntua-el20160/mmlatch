@@ -16,6 +16,10 @@ import torch
 import pickle
 import torch
 
+def process_label(value):
+        """Rounds the value to the nearest integer and clips it within the allowed range."""
+        rounded = round(value)
+        return max(-3.0, min(rounded, 3.0))
 def save_comparison_data_pickle(filepath, predictions, targets, masks_txt, masks_au, masks_vi):
     """
     Saves predictions, targets, and masks to a pickle file.
@@ -162,11 +166,11 @@ def compare_masks(data_new, data_comparison_link):
             
 
             # Initialize lists if keys do not exist
-            
-            if targets[i] not in dict_temp:
-               dict_temp[targets[i]] = []
-            if targets[i] not in dict_temp_comp:
-                dict_temp_comp[targets[i]] = []
+            tar = process_label(targets[i])
+            if tar not in dict_temp:
+               dict_temp[tar] = []
+            if tar not in dict_temp_comp:
+                dict_temp_comp[tar] = []
             
             #flatten them to the feature dimension
             mask_flat_new = np.mean(mask_new[i], axis=(0, 1))
@@ -176,8 +180,8 @@ def compare_masks(data_new, data_comparison_link):
             masks_transformed_new.append(mask_flat_new)
             masks_transformed_comp.append(mask_flat_comp)
             #append the flattened masks to the list for mean per modality per target
-            dict_temp[targets[i]].append(mask_flat_new)
-            dict_temp_comp[targets[i]].append(mask_flat_comp)
+            dict_temp[tar].append(mask_flat_new)
+            dict_temp_comp[tar].append(mask_flat_comp)
 
         # Compute the mean and difference mask for this modality
         masks_per_target_comp[modality] = dict_temp_comp
@@ -201,14 +205,6 @@ def compare_masks(data_new, data_comparison_link):
         # Add overall mean for this modality
         mean_mask_new_target[modality]["all"] = mean_mask_new[modality]
         diff_mean_mask_new_target[modality]["all"] = diff_mean_mask_new[modality]
-
-    for key,value in masks_per_target_new.items():
-
-        mean_mask_new_target[key] = np.mean(value, axis=0)
-        diff_mean_mask_new_target[key] = np.mean(value, axis=0) - np.mean(masks_per_target_comp[key], axis=0)
-    for modality in ["txt", "au", "vi"]:
-        mean_mask_new_target[modality]['all'] = mean_mask_new[modality]
-        mean_mask_new_target[modality]['all'] = mean_mask_new[modality]
 
     average_metrics = {key: np.mean(values) for key, values in metrics_all.items()}
 
@@ -291,16 +287,20 @@ def prediction_count(data_new, data_comparison_link):
     predictions_distr_new = {}
     predictions_distr_comparison = {}
     targets_distr = {}
-    for i in range(1,8):
-        predictions_distr_new[i] = 0
-        predictions_distr_comparison[i] = 0
-        targets_distr[i] = 0
+    
+    unique_targets = set(targets)
+    for i in unique_targets:
+        i_pros = process_label(i)
+        predictions_distr_new[i_pros] = 0
+        predictions_distr_comparison[i_pros] = 0
+        targets_distr[i_pros] = 0
     
 
     for i in range(len(predictions_new)):
-        targets_distr[targets[i]] += 1
-        predictions_distr_new[predictions_new[i]] += 1
-        predictions_distr_comparison[predictions_comparison[i]] += 1
+
+        targets_distr[process_label(targets[i])] += 1
+        predictions_distr_new[process_label(predictions_new[i])] += 1
+        predictions_distr_comparison[process_label(predictions_comparison[i])] += 1
     return predictions_distr_new,predictions_distr_comparison,targets_distr
 
 import matplotlib.pyplot as plt

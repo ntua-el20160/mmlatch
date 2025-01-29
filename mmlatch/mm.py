@@ -175,7 +175,7 @@ class Feedback(nn.Module):
         """Applies the feedback mechanism across three modalities"""
         used =[True,True,True]
         if random.random() < 0.2:# Mask-Dropout 20% chance to drop one of the 3
-            used[random.randint(0,2)] =False
+            used[random.randint(0,2)] = False
 
 
         #x,masky = self.f1(low_x, hi_y, hi_z, lengths=lengths,used_y = used[1],used_z = used[2])

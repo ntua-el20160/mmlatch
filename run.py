@@ -339,6 +339,7 @@ if __name__ == "__main__":
         # Plot and save masks for each modality
         for modality in ["txt", "au", "vi"]:
             # Plot and save mean masks
+            print(mean_mask_mod_target[modality])
             plot_masks(
                 mean_mask_mod_target[modality],
                 f'Mean_{modality}_Target_{experiment_name}',
