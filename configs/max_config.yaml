@@ -1,4 +1,4 @@
-data_dir: /content/drive/MyDrive/shared-with-me/CMU-MOSI
+data_dir: /content/drive/MyDrive/CMU-MOSI
 results_dir: /content/drive/MyDrive/our_results
 train: true
 test: true
@@ -21,11 +21,14 @@ model:
   attention: true
   feedback: true
   feedback_type: learnable_sequence_mask
-  mask_index: 2
+  mask_index_train: 2
+  mask_index_test: 2
+  mask_dropout_train: 0.0
+  mask_dropout_test: 0.0
 
 experiment:
-  name: mosei-sentiment-audio-text-visual
-  description: MOSEI sentiment task
+  name: max-test
+  description: MOSEI sentiment task with max mask selection
 
 dataloaders:
   batch_size: 32

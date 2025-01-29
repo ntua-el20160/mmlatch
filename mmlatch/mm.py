@@ -4,7 +4,6 @@ import torch.nn.functional as F
 
 from mmlatch.attention import Attention, SymmetricAttention
 from mmlatch.rnn import RNN, AttentiveRNN
-import random
 
 class FeedbackUnit(nn.Module):
     """Applies the mask to the input. Either a learnable static mask or a learnable sequence mask"""
@@ -134,9 +133,11 @@ class Feedback(nn.Module):
         dropout=0.1,
         device="cpu",
         mask_index = 1, #add mask index parameter
+        mask_dropout = 0.0, #add mask dropout parameter
     ):
         super(Feedback, self).__init__()
         # Initialize a feedback unit for each modality
+        self.mask_dropout = mask_dropout
         self.f1 = FeedbackUnit(
             hidden_dim,
             mod1_sz,
@@ -171,11 +172,19 @@ class Feedback(nn.Module):
         self.f1.set_mask_index(new_mask_index)
         self.f2.set_mask_index(new_mask_index)
         self.f3.set_mask_index(new_mask_index)
+    def set_mask_dropout(self, new_mask_dropout):
+        """Updates mask_dropout for all Feedback ."""
+        self.mask_dropout = new_mask_dropout
+
     def forward(self, low_x, low_y, low_z, hi_x, hi_y, hi_z, lengths=None):
         """Applies the feedback mechanism across three modalities"""
         used =[True,True,True]
-        if random.random() < 0.2:# Mask-Dropout 20% chance to drop one of the 3
-            used[random.randint(0,2)] = False
+
+        if self.training:
+            # 20% chance to drop one of the three masks
+            if torch.rand(1).item() < self.mask_dropout:
+                drop_idx = torch.randint(0, 3, (1,)).item()
+                used[drop_idx] = False
 
 
         #x,masky = self.f1(low_x, hi_y, hi_z, lengths=lengths,used_y = used[1],used_z = used[2])
@@ -516,6 +525,7 @@ class AVTEncoder(nn.Module):
         feedback_type="learnable_sequence_mask",
         device="cpu",
         mask_index=1,  # Add mask_index parameter
+        mask_dropout=0.0,  # Add mask_dropout parameter
     ):
         super(AVTEncoder, self).__init__()
         self.feedback = feedback
@@ -573,6 +583,7 @@ class AVTEncoder(nn.Module):
                 dropout=0.1,
                 device=device,
                 mask_index=mask_index,  # Pass mask_index
+                mask_dropout=mask_dropout,  # Pass mask_dropout
             )
 
     def _encode(self, txt, au, vi, lengths):
@@ -590,6 +601,9 @@ class AVTEncoder(nn.Module):
             new_mask_index (int): New mask index value (1 to 5).
         """
         self.fm.set_mask_index(new_mask_index)
+    def set_mask_dropout(self, new_mask_dropout):
+        """Updates mask_dropout for all Feedback ."""
+        self.fm.set_mask_dropout(new_mask_dropout)
         
 
     def _fuse(self, txt, au, vi, lengths):
@@ -628,6 +642,7 @@ class AVTClassifier(nn.Module):
         device="cpu",
         num_classes=1,
         mask_index=1,  # Add mask_index parameter
+        mask_dropout=0.0,  # Add mask_dropout parameter
     ):
         super(AVTClassifier, self).__init__()
 
@@ -647,6 +662,7 @@ class AVTClassifier(nn.Module):
             feedback_type=feedback_type,
             device=device,
             mask_index=mask_index,  # Pass mask_index
+            mask_dropout=mask_dropout,  # Pass mask_dropout
         )
 
         self.classifier = nn.Linear(self.encoder.out_size, num_classes)
@@ -659,6 +675,9 @@ class AVTClassifier(nn.Module):
             new_mask_index (int): New mask index value (1 to 5).
         """
         self.encoder.set_mask_index(new_mask_index)
+    def set_mask_dropout(self, new_mask_dropout):
+        """Updates mask_dropout for all Feedback ."""
+        self.encoder.set_mask_dropout(new_mask_dropout)
     def forward(self, inputs):
         out,mask_txt,mask_au,mask_vi = self.encoder(
             inputs["text"], inputs["audio"], inputs["visual"], inputs["lengths"]

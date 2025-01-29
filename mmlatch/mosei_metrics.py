@@ -218,68 +218,101 @@ import os
 from typing import Dict, Any
 
 
-def plot_masks(mask_dict, description, save_directory, title=None):
+def plot_masks(mask_dict, description, save_directory, title=None, ylabel ='Target'):
     """
-    Plots all masks from a dictionary in a single plot.
+    Plots masks for different modalities in a specified order and saves the plot and mask data.
 
     Args:
-        mask_dict (dict): Dictionary of masks, where keys are "modality_target" and values are arrays.
-        description (str): Description for the plot and file naming.
-        save_directory (str): Directory to save the resulting plot and data.
-        title (str): Optional custom title for the plot.
+        mask_dict (dict): Dictionary where keys are modality identifiers and values are NumPy arrays of masks.
+        description (str): Description used for naming the saved files.
+        save_directory (str): Directory where the plot and data will be saved.
+        title (str, optional): Title for the plot. Defaults to None.
     """
     import os
     import matplotlib.pyplot as plt
     import numpy as np
     import pickle
+    import seaborn as sns
 
-    # Create the save directory if it doesn't exist
-    os.makedirs(save_directory, exist_ok=True)
+    try:
+        # Create the save directory if it doesn't exist
+        os.makedirs(save_directory, exist_ok=True)
 
-    # Prepare data for plotting
-    keys = list(mask_dict.keys())  # Keys for the y-axis
-    masks = [mask for mask in mask_dict.values()]  # Extract mask arrays
-    max_features = max(mask.shape[0] for mask in masks)  # Determine the largest feature dimension
+        # Define new ordering of keys
+        ordered_keys = [-3, -2, -1, 0, 1, 2, 3, 'all']
+        ordered_labels = ["neg++", "neg+", "neg", "neu", "pos", "pos+", "pos++", "all"]
+        
+        # Sort and filter only present keys
+        sorted_keys = [key for key in ordered_keys if key in mask_dict]
+        sorted_labels = [ordered_labels[ordered_keys.index(key)] for key in sorted_keys]
 
-    # Normalize all masks to the same length (for visualization)
-    masks_padded = np.zeros((len(masks), max_features))
-    for i, mask in enumerate(masks):
-        masks_padded[i, :mask.shape[0]] = mask  # Pad or keep masks as they are
+        # Reorder the masks based on sorted keys
+        sorted_masks = [mask_dict[key] for key in sorted_keys]
 
-    # Set up the figure
-    plt.figure(figsize=(12, 8))
-    plt.imshow(masks_padded, cmap='viridis', aspect='auto', extent=[1, max_features, 0, len(keys)])
-    plt.colorbar(label='Mask Values')
+        # Verify that all masks have the same length
+        mask_lengths = [mask.shape[0] for mask in sorted_masks]
+        if len(set(mask_lengths)) != 1:
+            raise ValueError("All masks must have the same length for plotting.")
 
-    # Set axis labels and ticks
-    plt.xticks(ticks=np.arange(1, max_features + 1), labels=np.arange(1, max_features + 1))  # Dynamic x-axis
-    plt.yticks(ticks=np.arange(len(keys)), labels=keys)  # Keys (modality_target)
-    plt.xlabel('Feature Dimension')
-    plt.ylabel('Modality_Target')
+        max_features = mask_lengths[0]  # Since all are the same
 
-    # Set the title
-    plot_title = title if title else description.replace('_', ' ').capitalize()
-    plt.title(plot_title)
+        # Convert masks to a 2D NumPy array
+        masks_array = np.array(sorted_masks)
 
-    # Adjust layout and show the plot
-    plt.tight_layout()
-    plt.show()
+        # Check for NaN or Inf values
+        if np.isnan(masks_array).any() or np.isinf(masks_array).any():
+            print("Warning: Masks contain NaN or Inf values.")
 
-    # Save the plot as an image
-    plot_path = os.path.join(save_directory, f"{description}.png")
-    plt.savefig(plot_path)
-    print(f"Plot saved to {plot_path}")
+        # Set up the figure
+        plt.figure(figsize=(12, 4))
 
-    # Save the mask dictionary using pickle
-    save_path = os.path.join(save_directory, f"{description}.pkl")
-    with open(save_path, 'wb') as f:
-        pickle.dump(mask_dict, f)
-    print(f"Mask data saved to {save_path}")
+        # Use a perceptually uniform colormap like the second image
+        sns.heatmap(masks_array, cmap='magma', xticklabels=5, yticklabels=sorted_labels, cbar=True)
+
+        # Set axis labels
+        plt.xlabel('Feature Dimension')
+        plt.ylabel(ylabel)
+
+        # Set the title
+        plot_title = title if title else description.replace('_', ' ').capitalize()
+        plt.title(plot_title)
+
+        # Adjust layout
+        plt.tight_layout()
+
+        # Save the plot as an image **before** showing it
+        plot_path = os.path.join(save_directory, f"{description}.png")
+        plt.savefig(plot_path)
+        print(f"Plot saved to {plot_path}")
+
+        # Show the plot
+        plt.show()
+
+        # Save the mask dictionary using pickle
+        save_path = os.path.join(save_directory, f"{description}.pkl")
+        with open(save_path, 'wb') as f:
+            pickle.dump(mask_dict, f)
+        print(f"Mask data saved to {save_path}")
+
+    except Exception as e:
+        print(f"An error occurred in plot_masks: {e}")
 
 
+
+
+import os
+import matplotlib.pyplot as plt
+import numpy as np
+import pickle
+import seaborn as sns
+
+import os
+import matplotlib.pyplot as plt
+import numpy as np
+import pickle
+import seaborn as sns
 
 def prediction_count(data_new, data_comparison_link):
-    
     data = load_comparison_data_pickle(data_comparison_link)
     predictions_new = data_new['predictions']
     predictions_comparison = data['predictions']
@@ -288,58 +321,61 @@ def prediction_count(data_new, data_comparison_link):
     predictions_distr_comparison = {}
     targets_distr = {}
     
-    unique_targets = set(targets)
-    for i in unique_targets:
-        i_pros = process_label(i)
-        predictions_distr_new[i_pros] = 0
-        predictions_distr_comparison[i_pros] = 0
-        targets_distr[i_pros] = 0
+    label_mapping = {
+        -3: "neg++",
+        -2: "neg+",
+        -1: "neg",
+         0: "neu",
+         1: "pos",
+         2: "pos+",
+         3: "pos++"
+    }
     
+    ordered_labels = [label_mapping[i] for i in sorted(label_mapping.keys())]
+    
+    for label in ordered_labels:
+        predictions_distr_new[label] = 0
+        predictions_distr_comparison[label] = 0
+        targets_distr[label] = 0
 
     for i in range(len(predictions_new)):
+        targets_distr[label_mapping[process_label(targets[i])]] += 1
+        predictions_distr_new[label_mapping[process_label(predictions_new[i])]] += 1
+        predictions_distr_comparison[label_mapping[process_label(predictions_comparison[i])]] += 1
+    
+    return predictions_distr_new, predictions_distr_comparison, targets_distr
 
-        targets_distr[process_label(targets[i])] += 1
-        predictions_distr_new[process_label(predictions_new[i])] += 1
-        predictions_distr_comparison[process_label(predictions_comparison[i])] += 1
-    return predictions_distr_new,predictions_distr_comparison,targets_distr
-
-import matplotlib.pyplot as plt
-import pickle
-import os
-from typing import Dict
-
-def save_histogram_data(predictions_distr_new,predictions_distr_comparison,targets_distr,save_directory,experiment_name):
-    """
-    Plots histograms for prediction distributions and saves the distribution dictionaries.
-
-    Args:
-        predictions_distr_new (Dict[int, int]): Distribution of new predictions.
-        predictions_distr_comparison (Dict[int, int]): Distribution of comparison predictions.
-        targets_distr (Dict[int, int]): Distribution of targets.
-        save_directory (str): Directory where distribution data will be saved.
-    """
-    import os
-
-    # Create the save directory if it doesn't exist
+def save_histogram_data(predictions_distr_new, predictions_distr_comparison, targets_distr, save_directory, experiment_name):
     os.makedirs(save_directory, exist_ok=True)
-
-    # Define the bins (assuming predictions and targets are integers from 1 to 7)
-    bins = range(1, 9)  # To include 7 as the last bin
-
-    # Plotting New Predictions
-    plt.figure(figsize=(8, 6))
-    plt.hist(predictions_distr_new.keys(), bins=bins, weights=predictions_distr_new.values(), alpha=0.5, label='New Predictions', color='blue', edgecolor='black')
-    plt.hist(predictions_distr_comparison.keys(), bins=bins, weights=predictions_distr_comparison.values(), alpha=0.5, label='Comparison Predictions', color='green', edgecolor='black')
-    plt.hist(targets_distr.keys(), bins=bins, weights=targets_distr.values(), alpha=0.5, label='Targets', color='red', edgecolor='black')
+    
+    ordered_labels = ["neg++", "neg+", "neg", "neu", "pos", "pos+", "pos++"]
+    
+    values_new = [predictions_distr_new[label] for label in ordered_labels]
+    values_comparison = [predictions_distr_comparison[label] for label in ordered_labels]
+    values_targets = [targets_distr[label] for label in ordered_labels]
+    
+    x = np.arange(len(ordered_labels))
+    width = 0.3
+    
+    plt.figure(figsize=(10, 6))
+    plt.bar(x - width, values_new, width, label='New Predictions', color='blue', edgecolor='black')
+    plt.bar(x, values_comparison, width, label='Comparison Predictions', color='green', edgecolor='black')
+    plt.bar(x + width, values_targets, width, label='Targets', color='red', edgecolor='black')
+    
+    plt.xticks(x, ordered_labels, rotation=45)
     plt.xlabel('Prediction/Target Class')
     plt.ylabel('Count')
     plt.title('Prediction and Target Distributions')
-    plt.legend(loc='upper right')
-    plt.xticks(bins[:-1])  # Set x-ticks to class labels
+    plt.legend()
     plt.tight_layout()
-    plt.show()  # Display the histogram
-
-    # Save the distribution dictionaries using pickle
+    
+    # Save the figure
+    plot_path = os.path.join(save_directory, f"prediction_target_distributions_{experiment_name}.png")
+    plt.savefig(plot_path)
+    print(f"Histogram plot saved to {plot_path}")
+    
+    plt.show()
+    
     distribution_data = {
         'predictions_distr_new': predictions_distr_new,
         'predictions_distr_comparison': predictions_distr_comparison,
@@ -349,6 +385,7 @@ def save_histogram_data(predictions_distr_new,predictions_distr_comparison,targe
     with open(save_path, 'wb') as f:
         pickle.dump(distribution_data, f)
     print(f"Histogram distribution data saved to {save_path}")
+
 
 
 def multiclass_acc(preds, truths):

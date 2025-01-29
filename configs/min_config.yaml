@@ -21,14 +21,14 @@ model:
   attention: true
   feedback: true
   feedback_type: learnable_sequence_mask
-  mask_index_train: 1
-  mask_index_test: 1
+  mask_index_train: 3
+  mask_index_test: 3
   mask_dropout_train: 0.0
   mask_dropout_test: 0.0
 
 experiment:
-  name: base-test
-  description: MOSEI sentiment task
+  name: min-test
+  description: MOSEI sentiment task with minimum mask selection
 
 dataloaders:
   batch_size: 32

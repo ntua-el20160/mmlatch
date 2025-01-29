@@ -67,13 +67,39 @@ def get_parser():
     )
 
     parser.add_argument(
-        "--mask-index",
-        dest="model.mask_index",
+        "--mask-index-train",
+        dest="model.mask_index_train",
         default=1,
         type=int,
         choices=[1, 2, 3, 4, 5],
         help="Masking strategy index (1: average, 2: max, 3: min, 4: residual, 5: max deviation from 0.5)",
     )
+
+    parser.add_argument(
+        "--mask-index-test",
+        dest="model.mask_index_test",
+        default=1,
+        type=int,
+        choices=[1, 2, 3, 4, 5],
+        help="Masking strategy index (1: average, 2: max, 3: min, 4: residual, 5: max deviation from 0.5)",
+    )
+
+    parser.add_argument( #Defines the number of classes
+        "--mask-dropout-train",
+        dest="model.mask_dropout_train",
+        default=0.0,
+        type=float,
+        help="Masking dropout probability during training",
+    )
+
+    parser.add_argument( #Defines the number of classes
+        "--mask-dropout-test",
+        dest="model.mask_dropout_test",
+        default=0.0,
+        type=float,
+        help="Masking dropout probability during testing",
+    )
+
 
     parser.add_argument( #Defines the directory for the results
         "--result-dir",
@@ -161,7 +187,8 @@ if __name__ == "__main__":
         feedback_type=C["model"]["feedback_type"],
         device=C["device"],
         num_classes=C["num_classes"],
-        mask_index=C["model"]["mask_index"],  # Pass mask_index
+        mask_index=C["model"]["mask_index_train"],  # Pass mask_index
+        mask_dropout=C["model"]["mask_dropout_train"],  # Pass mask_dropout
     )
 
     def count_parameters(model):
@@ -282,7 +309,8 @@ if __name__ == "__main__":
             
         )
         #UPDATE MASK INDEX HERE IF NEEDED
-        #trainer.set_mask_index(1)
+        trainer.set_mask_index(C["model"]["mask_index_test"])
+        trainer.set_mask_dropout(C["model"]["mask_dropout_test"])
         predictions, targets,masks_txt,masks_au,masks_vi = trainer.predict(test_loader)
 
         # insert code to load

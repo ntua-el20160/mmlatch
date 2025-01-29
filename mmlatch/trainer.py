@@ -212,6 +212,9 @@ class Trainer(object):
             new_mask_index (int): New mask index value (1 to 5).
         """
         self.model.set_mask_index(new_mask_index)
+    def set_mask_dropout(self, new_mask_dropout):
+        """Updates mask_dropout for all Feedback ."""
+        self.model.set_mask_dropout(new_mask_dropout)
     #Defines the training loop
     def fit(
         self: TrainerType,
