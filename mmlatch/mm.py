@@ -385,6 +385,7 @@ class AudioVisualTextEncoder(nn.Module):
         visual_cfg["return_hidden"] = True
 
         self.text = GloveEncoder(text_cfg, device=device)
+        #self.text = BertEncoder(cfg, device="cuda")
         self.audio = AudioEncoder(audio_cfg, device=device)
         self.visual = VisualEncoder(visual_cfg, device=device)
 
@@ -420,17 +421,27 @@ class AudioVisualTextEncoder(nn.Module):
         fused = self.fuser(txt, au, vi, lengths)
 
         return fused
-
+    """
     def forward(self, txt, au, vi, lengths):
         if self.feedback:
             txt1, au1, vi1 = self._encode(txt, au, vi, lengths)
-            txt, au, vi = self.fm(txt, au, vi, txt1, au1, vi1, lengths=lengths)
+            txt, au, vi, mask_to_x,mask_to_y,mask_to_z = self.fm(txt, au, vi, txt1, au1, vi1, lengths=lengths)
 
         txt, au, vi = self._encode(txt, au, vi, lengths)
         fused = self._fuse(txt, au, vi, lengths)
 
         return fused
+    """
 
+    def forward(self, txt, au, vi, lengths):
+        if self.feedback:
+            txt1, au1, vi1 = self._encode(txt, au, vi, lengths)
+            txt, au, vi,mask_txt,mask_au,mask_vi = self.fm(txt, au, vi, txt1, au1, vi1, lengths=lengths)
+
+        txt, au, vi = self._encode(txt, au, vi, lengths)
+        fused = self._fuse(txt, au, vi, lengths)
+
+        return fused,mask_txt,mask_au,mask_vi
 
 class AudioVisualTextClassifier(nn.Module):
     """AudioVisualTextClassifier class integrates the AudioVisualTextEncoder with a classifier"""
@@ -464,11 +475,11 @@ class AudioVisualTextClassifier(nn.Module):
         self.classifier = nn.Linear(self.encoder.out_size, num_classes)
 
     def forward(self, inputs):
-        out = self.encoder(
+        out, mask_txt,mask_au,mask_vi = self.encoder(
             inputs["text"], inputs["audio"], inputs["visual"], inputs["lengths"]
         )
 
-        return self.classifier(out)
+        return self.classifier(out), mask_txt,mask_au,mask_vi
 
 
 class UnimodalEncoder(nn.Module):
