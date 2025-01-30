@@ -14,6 +14,13 @@ from torch.optim.optimizer import Optimizer
 
 from typing import Dict, Union, List, TypeVar, Tuple
 
+import numpy as np
+import matplotlib.pyplot as plt
+import umap
+import seaborn as sns
+import re
+
+
 T = TypeVar("T")
 K = TypeVar("K")
 V = TypeVar("V")
@@ -224,3 +231,63 @@ def print_separator(
     symbol: str = "*", n: int = 10, print_fn: Callable[[str], None] = print
 ):
     print_fn(symbol * n)
+
+
+# ==== Function to parse embeddings from text files ====
+def parse_embeddings(filename):
+    embeddings = {"text_before": [], "text_after": [],
+                  "audio_before": [], "audio_after": [],
+                  "visual_before": [], "visual_after": []}
+    
+    current_key = None
+    with open(filename, "r") as f:
+        for line in f:
+            if "Before Applying Mask" in line:
+                mode = "before"
+            elif "After Applying Mask" in line:
+                mode = "after"
+            elif "Text:" in line:
+                current_key = f"text_{mode}"
+            elif "Audio:" in line:
+                current_key = f"audio_{mode}"
+            elif "Visual:" in line:
+                current_key = f"visual_{mode}"
+            elif current_key:
+                # Extract numbers from the line and convert to numpy array
+                array_data = np.array(eval(line.strip()))
+                embeddings[current_key].extend(array_data)
+    
+    # Convert to numpy arrays
+    for key in embeddings:
+        embeddings[key] = np.array(embeddings[key])
+    
+    return embeddings
+
+# ==== Function to bin predictions ====
+def bin_predictions(predictions):
+    bins = [-np.inf, -2.5, -1.5, -0.5, 0.5, 1.5, 2.5, np.inf]
+    labels = [-3, -2, -1, 0, 1, 2, 3]
+    return np.digitize(predictions, bins, right=True) - 1  # Adjust index
+
+# ==== Function to plot UMAP embeddings ====
+def plot_umap(embeddings, predictions, title_before, title_after, ax1, ax2):
+    reducer = umap.UMAP(n_neighbors=15, min_dist=0.1, metric="cosine", random_state=42)
+
+    # Fit and transform embeddings
+    embedding_before = reducer.fit_transform(embeddings["before"])
+    embedding_after = reducer.fit_transform(embeddings["after"])
+
+    # Scatter plots
+    cmap = sns.color_palette("husl", 7)  # 7 color bins
+    scatter1 = ax1.scatter(embedding_before[:, 0], embedding_before[:, 1], c=predictions, cmap="viridis", alpha=0.7)
+    scatter2 = ax2.scatter(embedding_after[:, 0], embedding_after[:, 1], c=predictions, cmap="viridis", alpha=0.7)
+
+    # Titles and aesthetics
+    ax1.set_title(title_before)
+    ax2.set_title(title_after)
+    ax1.set_xticks([]), ax1.set_yticks([])
+    ax2.set_xticks([]), ax2.set_yticks([])
+
+    # Add colorbars
+    plt.colorbar(scatter1, ax=ax1, label="Binned Prediction Labels")
+    plt.colorbar(scatter2, ax=ax2, label="Binned Prediction Labels")

@@ -8,13 +8,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 from ignite.metrics import Accuracy, Fbeta, Loss
 from torch.utils.data import DataLoader
+import numpy as np
 
 from mmlatch.cmusdk import mosei, mosi
 from mmlatch.config import load_config
 from mmlatch.data import MOSEI, MOSEICollator, ToTensor
 from mmlatch.mm import AudioVisualTextClassifier, AVTClassifier
 from mmlatch.trainer import MOSEITrainer
-from mmlatch.util import safe_mkdirs
+from mmlatch.util import safe_mkdirs,  parse_embeddings, bin_predictions, plot_umap
 
 
 class BCE(nn.Module):
@@ -351,6 +352,24 @@ if __name__ == "__main__":
             del trainer
         except:
             pass
+
+        def create_or_overwrite_file(filepath):
+            """Creates or overwrites a file.  Deletes the file first if it exists."""
+            try:
+                os.remove(filepath)  # Try to delete. No error if it doesn't exist.
+            except FileNotFoundError:
+                pass  # It's okay if the file wasn't there.
+
+            with open(filepath, "w") as f:  # 'w' mode creates or overwrites.
+                print(f"File '{filepath}' created or overwritten.")
+                
+
+
+        # Example usage:
+
+        filepath = f"embedings_mask{C['model']['mask_index_test']}.txt"  
+        create_or_overwrite_file(filepath)
+
         trainer = MOSEITrainer(
             model,
             optimizer,
@@ -364,12 +383,41 @@ if __name__ == "__main__":
             retain_graph=C["trainer"]["retain_graph"],
             loss_fn=criterion,
             device=C["device"],
+            inference=True
             
         )
         #UPDATE MASK INDEX HERE IF NEEDED
         trainer.set_mask_index(C["model"]["mask_index_test"])
         trainer.set_mask_dropout(C["model"]["mask_dropout_test"])
         predictions, targets,masks_txt,masks_au,masks_vi = trainer.predict(test_loader)
+        
+
+        embeddings = parse_embeddings(filepath)
+        
+        data = {
+        "text": {"before": embeddings["text_before"], "after": embeddings["text_after"]},
+        "audio": {"before": embeddings["audio_before"], "after": embeddings["audio_after"]},
+        "visual": {"before": embeddings["visual_before"], "after": embeddings["visual_after"]}
+        }
+
+        import matplotlib.pyplot as plt
+
+        fig, axes = plt.subplots(3, 2, figsize=(12, 12))
+
+        my_targets = torch.cat(targets)
+        binned_targets = bin_predictions(my_targets)
+
+        plot_umap(data["text"], binned_targets, "Text Embeddings (Before Mask)", "Text Embeddings (After Mask)", axes[0, 0], axes[0, 1])
+        plot_umap(data["audio"], binned_targets, "Audio Embeddings (Before Mask)", "Audio Embeddings (After Mask)", axes[1, 0], axes[1, 1])
+        plot_umap(data["visual"], binned_targets, "Visual Embeddings (Before Mask)", "Visual Embeddings (After Mask)", axes[2, 0], axes[2, 1])
+
+        plt.tight_layout()
+        plt.savefig(f"results_umap/umap_visualization_{filepath}.png", dpi=300)  # Save as PNG
+        plt.show()
+
+
+
+
 
         # insert code to load
         pred = torch.cat(predictions)

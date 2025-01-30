@@ -38,6 +38,7 @@ class Trainer(object):
         retain_graph: bool = False, #retain computation graph after backprop
         dtype: torch.dtype = torch.float,
         device: str = "cpu",
+        inference: bool = False,  # New inference mode flag
     ) -> None:
         self.dtype = dtype
         self.retain_graph = retain_graph
@@ -48,6 +49,8 @@ class Trainer(object):
         self.patience = patience
         self.accumulation_steps = accumulation_steps
         self.checkpoint_dir = checkpoint_dir
+        self.inference = inference  # Store inference mode flag
+        
         #validates the checkpoint paths
         model_checkpoint = self._check_checkpoint(model_checkpoint)
         optimizer_checkpoint = self._check_checkpoint(optimizer_checkpoint)
@@ -153,7 +156,7 @@ class Trainer(object):
         self: TrainerType, batch: List[torch.Tensor]
     ) -> Tuple[torch.Tensor, ...]:
         inputs, targets = self.parse_batch(batch) #extracts inputs and targets from the batch
-        y_pred,mask_txt,mask_au,mask_vi = self.model(inputs) #predicts the output
+        y_pred,mask_txt,mask_au,mask_vi = self.model(inputs, self.inference) #predicts the output
 
         return y_pred, targets,mask_txt,mask_au,mask_vi #returns the predicted output and the target
 
@@ -319,7 +322,7 @@ class MOSEITrainer(Trainer):#inherits from the Trainer class and specialises 2 f
     ) -> Tuple[torch.Tensor, ...]:
         inputs, targets = self.parse_batch(batch)
         #y_pred = self.model(inputs)
-        y_pred,mask_txt,mask_au,mask_vi = self.model(inputs)
+        y_pred,mask_txt,mask_au,mask_vi = self.model(inputs, self.inference)
         y_pred = y_pred.squeeze()
         targets = targets.squeeze()
 

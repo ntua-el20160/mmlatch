@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import datetime
 
 from mmlatch.attention import Attention, SymmetricAttention
 from mmlatch.rnn import RNN, AttentiveRNN
@@ -538,6 +539,8 @@ class AVTEncoder(nn.Module):
         mask_index=1,  # Add mask_index parameter
         mask_dropout=0.0,  # Add mask_dropout parameter
     ):
+        self.mask_index = mask_index
+        self.batch_idx = 0
         super(AVTEncoder, self).__init__()
         self.feedback = feedback
 
@@ -622,14 +625,32 @@ class AVTEncoder(nn.Module):
 
         return fused
 
-    def forward(self, txt, au, vi, lengths):
+    def forward(self, txt, au, vi, lengths, inference):
+
         if self.feedback:
             txt1, au1, vi1 = self._encode(txt, au, vi, lengths)
+
+            if inference:
+                with open(f"embedings_mask{self.mask_index}.txt", "a") as f:
+                    # Log embeddings before applying mask
+                    f.write(f"Batch {self.batch_idx} - Before Applying Mask:\n")
+                    f.write(f"Text: {txt1.detach().cpu().numpy()}\n")
+                    f.write(f"Audio: {au1.detach().cpu().numpy()}\n")
+                    f.write(f"Visual: {vi1.detach().cpu().numpy()}\n\n")
+
             txt, au, vi,mask_txt,mask_au,mask_vi = self.fm(txt, au, vi, txt1, au1, vi1, lengths=lengths)
+
+        if inference:
+            # Log embeddings after applying mask
+            with open(f"embedings_mask{self.mask_index}.txt", "a") as f:
+                f.write(f"Batch {self.batch_idx} - After Applying Mask:\n")
+                f.write(f"Text: {txt.detach().cpu().numpy()}\n")
+                f.write(f"Audio: {au.detach().cpu().numpy()}\n")
+                f.write(f"Visual: {vi.detach().cpu().numpy()}\n\n")
 
         txt, au, vi = self._encode(txt, au, vi, lengths)
         fused = self._fuse(txt, au, vi, lengths)
-
+        self.batch_idx += 1
         return fused,mask_txt,mask_au,mask_vi
 
 
@@ -654,7 +675,9 @@ class AVTClassifier(nn.Module):
         num_classes=1,
         mask_index=1,  # Add mask_index parameter
         mask_dropout=0.0,  # Add mask_dropout parameter
+        inference = False
     ):
+        self.inference = inference
         super(AVTClassifier, self).__init__()
 
         self.encoder = AVTEncoder(
@@ -691,7 +714,7 @@ class AVTClassifier(nn.Module):
         self.encoder.set_mask_dropout(new_mask_dropout)
     def forward(self, inputs):
         out,mask_txt,mask_au,mask_vi = self.encoder(
-            inputs["text"], inputs["audio"], inputs["visual"], inputs["lengths"]
+            inputs["text"], inputs["audio"], inputs["visual"], inputs["lengths"], self.inference
         )
 
         return self.classifier(out),mask_txt,mask_au,mask_vi
