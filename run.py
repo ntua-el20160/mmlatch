@@ -15,6 +15,7 @@ from mmlatch.data import MOSEI, MOSEICollator, ToTensor
 from mmlatch.mm import AudioVisualTextClassifier, AVTClassifier
 from mmlatch.trainer import MOSEITrainer
 from mmlatch.util import safe_mkdirs
+from mmlatch.noise import add_noise
 
 
 class BCE(nn.Module):
@@ -107,6 +108,37 @@ def get_parser():
         help="Results directory",
     )
 
+    parser.add_argument( 
+        "--noise-type",
+        dest="model.noise_type",
+        default="none",
+        type=str,
+        help="Type of noise to be used on train/test data (none, gaussian, dropout, shuffle)",
+    )
+
+    parser.add_argument( 
+        "--noise-percentage-train",
+        dest="model.noise_percentage_train",
+        default=0.0,
+        type=float,
+        help="Percentage of noise on train set",
+    )
+
+    parser.add_argument( 
+        "--noise-percentage-test",
+        dest="model.noise_percentage_test",
+        default=0.0,
+        type=float,
+        help="Percentage of noise on test set",
+    )
+
+    parser.add_argument( 
+        "--noise-modality",
+        dest="model.noise_modality",
+        default="all",
+        type=str,
+        help="Modality to be affected by the noise (all, text, audio, visual)",
+    )
     return parser
 
 
@@ -144,6 +176,18 @@ if __name__ == "__main__":
 
     for d in test:
         d["text"] = d["glove"]
+
+    # Add noise
+    train = add_noise(train,
+                      noise_type=C['model']['noise_type'], 
+                      noise_modality=C['model']['noise_modality'], 
+                      noise_level=C['model']['noise_percentage_train']
+                      )
+    test = add_noise(test, 
+                    noise_type=C['model']['noise_type'], 
+                    noise_modality=C['model']['noise_modality'], 
+                    noise_level=C['model']['noise_percentage_test']
+                    )
 
     #converts data to tensors
     to_tensor = ToTensor(device="cpu")
