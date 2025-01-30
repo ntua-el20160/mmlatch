@@ -11,7 +11,7 @@ model:
   text_input_size: 300
   audio_input_size: 74
   visual_input_size: 35
-  projection_size: 100
+  projection_size: 200
   text_layers: 1
   audio_layers: 1
   visual_layers: 1
@@ -22,7 +22,7 @@ model:
   feedback: true
   feedback_type: learnable_sequence_mask
   mask_index_train: 1
-  mask_index_test: 2
+  mask_index_test: 1
   mask_dropout_train: 0.0
   mask_dropout_test: 0.0
   noise_type: "none"
@@ -30,8 +30,8 @@ model:
   noise_modality: "all"
 
 experiment:
-  name: base-to-max-test
-  description: MOSEI sentiment task changing mask index from base to max selection
+  name: base-test
+  description: MOSEI sentiment task
 
 dataloaders:
   batch_size: 32

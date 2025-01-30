@@ -118,6 +118,7 @@ def compare_masks(data_new, data_comparison_link):
     #seperates the masks by the target that their input should have been
     masks_per_target_new = {}
     masks_per_target_comp = {}
+    mask_per_pred_new = {}
 
     #mean value of masks (2d array) per modality
     mean_mask_new = {}
@@ -127,9 +128,12 @@ def compare_masks(data_new, data_comparison_link):
 
     #similarly to before but grouped per target
     mean_mask_new_target = {}
-    diff_mean_mask_new_target = {}    
+    diff_mean_mask_new_target = {}   
+
+    mean_mask_new_pred = {}
 
     targets = data_new['targets']
+    predictions = data_new['predictions']
     data = load_comparison_data_pickle(data_comparison_link)
 
     for modality in ["txt", "au", "vi"]:
@@ -138,6 +142,7 @@ def compare_masks(data_new, data_comparison_link):
         masks_transformed_new = []
         dict_temp = {}
         dict_temp_comp = {}
+        dict_temp_pred = {}
 
         #get the masks for the new data and the comparison data
         mask_new = data_new.get(f'masks_{modality}', [])
@@ -167,10 +172,13 @@ def compare_masks(data_new, data_comparison_link):
 
             # Initialize lists if keys do not exist
             tar = process_label(targets[i])
+            pred = process_label(predictions[i])
             if tar not in dict_temp:
                dict_temp[tar] = []
             if tar not in dict_temp_comp:
                 dict_temp_comp[tar] = []
+            if pred not in dict_temp_pred:
+                dict_temp_pred[pred] = []
             
             #flatten them to the feature dimension
             mask_flat_new = np.mean(mask_new[i], axis=(0, 1))
@@ -182,10 +190,13 @@ def compare_masks(data_new, data_comparison_link):
             #append the flattened masks to the list for mean per modality per target
             dict_temp[tar].append(mask_flat_new)
             dict_temp_comp[tar].append(mask_flat_comp)
+            dict_temp_pred[pred].append(mask_flat_new)
 
         # Compute the mean and difference mask for this modality
         masks_per_target_comp[modality] = dict_temp_comp
         masks_per_target_new[modality] = dict_temp
+        mask_per_pred_new[modality] = dict_temp_pred
+
         mean_mask_new[modality] = np.mean(masks_transformed_new, axis=0)
         diff_mean_mask_new[modality] = np.mean(masks_transformed_new, axis=0) - np.mean(masks_transformed_comp, axis=0)
 
@@ -194,22 +205,30 @@ def compare_masks(data_new, data_comparison_link):
         if modality not in mean_mask_new_target:
             mean_mask_new_target[modality] = {}
             diff_mean_mask_new_target[modality] = {}
-
+            
         for target, masks_list in target_dict.items():
             mean_mask_new_target[modality][target] = np.mean(masks_list, axis=0)
             diff_mean_mask_new_target[modality][target] = (
                 np.mean(masks_list, axis=0)
                 - np.mean(masks_per_target_comp[modality][target], axis=0)
             )
+    for modality, target_dict in mask_per_pred_new.items():
+        if modality not in mean_mask_new_pred:
+            mean_mask_new_pred[modality] = {}
+            
+        for target, masks_list in target_dict.items():
+            mean_mask_new_pred[modality][target] = np.mean(masks_list, axis=0)
+            
 
         # Add overall mean for this modality
         mean_mask_new_target[modality]["all"] = mean_mask_new[modality]
         diff_mean_mask_new_target[modality]["all"] = diff_mean_mask_new[modality]
+        mean_mask_new_pred[modality]["all"] = mean_mask_new[modality]
 
     average_metrics = {key: np.mean(values) for key, values in metrics_all.items()}
 
         
-    return average_metrics,mean_mask_new_target,diff_mean_mask_new_target
+    return average_metrics,mean_mask_new_target,diff_mean_mask_new_target,mean_mask_new_pred
     
 import numpy as np
 import matplotlib.pyplot as plt
@@ -281,7 +300,7 @@ def plot_masks(mask_dict, description, save_directory, title=None, ylabel ='Targ
         plt.tight_layout()
 
         # Save the plot as an image **before** showing it
-        plot_path = os.path.join(save_directory, f"{description}.png")
+        plot_path = os.path.join(save_directory + "/plot_images", f"{description}.png")
         plt.savefig(plot_path)
         print(f"Plot saved to {plot_path}")
 
@@ -289,7 +308,7 @@ def plot_masks(mask_dict, description, save_directory, title=None, ylabel ='Targ
         plt.show()
 
         # Save the mask dictionary using pickle
-        save_path = os.path.join(save_directory, f"{description}.pkl")
+        save_path = os.path.join(save_directory+ "/plot_numbers", f"{description}.pkl")
         with open(save_path, 'wb') as f:
             pickle.dump(mask_dict, f)
         print(f"Mask data saved to {save_path}")
@@ -358,9 +377,11 @@ def save_histogram_data(predictions_distr_new, predictions_distr_comparison, tar
     width = 0.3
     
     plt.figure(figsize=(10, 6))
-    plt.bar(x - width, values_new, width, label='New Predictions', color='blue', edgecolor='black')
-    plt.bar(x, values_comparison, width, label='Comparison Predictions', color='green', edgecolor='black')
-    plt.bar(x + width, values_targets, width, label='Targets', color='red', edgecolor='black')
+    cmap = plt.get_cmap('magma')
+    
+    plt.bar(x - width, values_new, width, label='New Predictions', color=cmap(0.2), edgecolor='black')
+    plt.bar(x, values_comparison, width, label='Base Model Predictions', color=cmap(0.5), edgecolor='black')
+    plt.bar(x + width, values_targets, width, label='Targets', color=cmap(0.8), edgecolor='black')
     
     plt.xticks(x, ordered_labels, rotation=45)
     plt.xlabel('Prediction/Target Class')
@@ -370,7 +391,7 @@ def save_histogram_data(predictions_distr_new, predictions_distr_comparison, tar
     plt.tight_layout()
     
     # Save the figure
-    plot_path = os.path.join(save_directory, f"prediction_target_distributions_{experiment_name}.png")
+    plot_path = os.path.join(save_directory +"/plot_images", f"histogram.png")
     plt.savefig(plot_path)
     print(f"Histogram plot saved to {plot_path}")
     
@@ -381,10 +402,11 @@ def save_histogram_data(predictions_distr_new, predictions_distr_comparison, tar
         'predictions_distr_comparison': predictions_distr_comparison,
         'targets_distr': targets_distr
     }
-    save_path = os.path.join(save_directory, f"prediction_target_distributions_{experiment_name}.pkl")
+    save_path = os.path.join(save_directory+ "/plot_numbers", f"histogram.pkl") #
     with open(save_path, 'wb') as f:
         pickle.dump(distribution_data, f)
     print(f"Histogram distribution data saved to {save_path}")
+
 
 
 

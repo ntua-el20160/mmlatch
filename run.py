@@ -118,6 +118,7 @@ collate_fn = MOSEICollator( #Defines the collator for the DataLoader
 
 
 if __name__ == "__main__":
+    
     print("Running with configuration")
     pprint(C)
     SUBSET_FRACTION = 1 #Defines the fraction of the dataset to be used
@@ -170,7 +171,34 @@ if __name__ == "__main__":
     dev_loader = create_dataloader(dev)
     test_loader = create_dataloader(test)
     print("Running with feedback = {}".format(C["model"]["feedback"]))
-
+    """
+    text_cfg = {
+            "input_size": C["model"]["text_input_size"], "hidden_size": C["model"]["projection_size"], "layers": C["model"]["text_layers"], "bidirectional": C["model"]["bidirectional"],
+            "dropout": C["model"]["dropout"], "rnn_type": "lstm", "attention": C["model"]["attention"]
+        }
+    audio_cfg = {
+            "input_size": C["model"]["audio_input_size"], "hidden_size": C["model"]["projection_size"], "layers": C["model"]["audio_layers"], "bidirectional": C["model"]["bidirectional"],
+            "dropout": C["model"]["dropout"], "rnn_type": "lstm", "attention": C["model"]["attention"]
+        }
+    visual_cfg = {
+            "input_size": C["model"]["visual_input_size"], "hidden_size": C["model"]["projection_size"], "layers": C["model"]["visual_layers"], "bidirectional": C["model"]["bidirectional"],
+            "dropout": C["model"]["dropout"], "rnn_type": "lstm", "attention": C["model"]["attention"]
+        }
+    fuse_cfg = {
+        "projection_size": C["model"]["projection_size"], "feedback_type": C["model"]["feedback_type"]
+    }
+    model = AudioVisualTextClassifier(
+        audio_cfg=audio_cfg,
+        text_cfg=text_cfg,
+        visual_cfg=visual_cfg,
+        fuse_cfg=fuse_cfg,
+        modalities=["text", "audio", "visual"],
+        num_classes=C["num_classes"],
+        feedback=C["model"]["feedback"],
+        device=C["device"],
+    
+    )
+    """
     model = AVTClassifier(
         C["model"]["text_input_size"],
         C["model"]["audio_input_size"],
@@ -332,17 +360,19 @@ if __name__ == "__main__":
 
         metrics = eval_mosei_senti(pred, y_test, True)
         print_metrics(metrics)
-
-        results_dir = C["results_dir"]
-        safe_mkdirs(results_dir)
-        fname = uuid.uuid1().hex
-        results_file = os.path.join(results_dir, fname)
+        experiment_name = C["experiment"]["name"]
+        results_dir = C["results_dir"] + f"/{experiment_name}"
+        safe_mkdirs(results_dir+"/numeric_results") #creates the directory for the results if it does not exist
+        safe_mkdirs(results_dir+"/plot_images") #creates the directory for the plots if it does not exist
+        safe_mkdirs(results_dir+"/plot_numbers")
+        fname = f'results'
+        results_file = os.path.join(results_dir + f"/numeric_results", fname)
         fname2 = fname + "_masks"
-        results_file2 = os.path.join(results_dir, fname2)
+        results_file2 = os.path.join(results_dir + f"/numeric_results", fname2)
         save_metrics(metrics, results_file)
 
         comparison_filename = f"comparison_mask.pkl"
-        comparison_filepath = os.path.join(results_dir, comparison_filename)
+        comparison_filepath = os.path.join(C["results_dir"], comparison_filename)
         #save_comparison_data_pickle(comparison_filepath, pred, y_test, masks_txt, masks_au, masks_vi)
 
         data = {
@@ -353,7 +383,7 @@ if __name__ == "__main__":
     'masks_vi': [mask.cpu().numpy() for mask in masks_vi],
 }
 
-        avg_metrics, mean_mask_mod_target, diff_mask_mod_target = compare_masks(data, comparison_filepath)
+        avg_metrics, mean_mask_mod_target, diff_mask_mod_target,mean_mask_new_pred = compare_masks(data, comparison_filepath)
 
         # Print average metrics
         print_metrics(avg_metrics)
@@ -362,23 +392,30 @@ if __name__ == "__main__":
         save_metrics(avg_metrics, results_file2)
 
         # Retrieve experiment name for labeling
-        experiment_name = C["experiment"]["name"]
+        
 
         # Plot and save masks for each modality
         for modality in ["txt", "au", "vi"]:
             # Plot and save mean masks
-            print(mean_mask_mod_target[modality])
             plot_masks(
                 mean_mask_mod_target[modality],
-                f'Mean_{modality}_Target_{experiment_name}',
+                f'Mean_{modality}_Target',
                 save_directory=results_dir,
-                title=f"Averaged {modality} Masks and Target for {experiment_name}",
+                title=f"Averaged {modality} Masks per Target for {experiment_name}",
+                ylabel= 'Target'
             )
             plot_masks(
                 diff_mask_mod_target[modality],
-                f'Difference_{modality}_Target_{experiment_name}',
+                f'Difference_{modality}_Target',
                 save_directory=results_dir,
-                title=f"Difference of {modality} Averaged Masks with Default Per Target for {experiment_name}",
+                title=f"Difference of {modality} Averaged Masks with Default per Target for {experiment_name}",
+            )
+            plot_masks(
+                mean_mask_new_pred[modality],
+                f'Mean_{modality}_Prediction',
+                save_directory=results_dir,
+                title=f"Averaged{modality}  Masks per Prediction for {experiment_name}",
+                ylabel= 'Prediction'
             )
         predictions_distr_new,predictions_distr_comparison,targets_distr =prediction_count(data, comparison_filepath)
 

@@ -25,6 +25,9 @@ model:
   mask_index_test: 1
   mask_dropout_train: 0.0
   mask_dropout_test: 0.0
+  noise_type: "none"
+  noise_percentage: 0.0
+  noise_modality: "all"
 
 experiment:
   name: base-test
