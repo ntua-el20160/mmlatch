@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import datetime
+import numpy as np
+
+np.set_printoptions(threshold=np.inf)  # Ensures full array printing
 
 from mmlatch.attention import Attention, SymmetricAttention
 from mmlatch.rnn import RNN, AttentiveRNN
@@ -625,28 +628,28 @@ class AVTEncoder(nn.Module):
 
         return fused
 
-    def forward(self, txt, au, vi, lengths, inference):
+    def forward(self, txt, au, vi, lengths, plot_embeddigns):
 
         if self.feedback:
             txt1, au1, vi1 = self._encode(txt, au, vi, lengths)
 
-            if inference:
+            if plot_embeddigns:
                 with open(f"embedings_mask{self.mask_index}.txt", "a") as f:
                     # Log embeddings before applying mask
-                    f.write(f"Batch {self.batch_idx} - Before Applying Mask:\n")
-                    f.write(f"Text: {txt1.detach().cpu().numpy()}\n")
-                    f.write(f"Audio: {au1.detach().cpu().numpy()}\n")
-                    f.write(f"Visual: {vi1.detach().cpu().numpy()}\n\n")
+                     f.write(f"Batch {self.batch_idx} - Before Applying Mask:\n")
+                     f.write(f"Text: {np.array2string(txt1.detach().cpu().numpy(), separator=', ')}\n")
+                     f.write(f"Audio: {np.array2string(au1.detach().cpu().numpy(), separator=', ')}\n")
+                     f.write(f"Visual: {np.array2string(vi1.detach().cpu().numpy(), separator=', ')}\n\n")
 
             txt, au, vi,mask_txt,mask_au,mask_vi = self.fm(txt, au, vi, txt1, au1, vi1, lengths=lengths)
 
-        if inference:
+        if plot_embeddigns:
             # Log embeddings after applying mask
             with open(f"embedings_mask{self.mask_index}.txt", "a") as f:
                 f.write(f"Batch {self.batch_idx} - After Applying Mask:\n")
-                f.write(f"Text: {txt.detach().cpu().numpy()}\n")
-                f.write(f"Audio: {au.detach().cpu().numpy()}\n")
-                f.write(f"Visual: {vi.detach().cpu().numpy()}\n\n")
+                f.write(f"Text: {np.array2string(txt1.detach().cpu().numpy(), separator=', ')}\n")
+                f.write(f"Audio: {np.array2string(au1.detach().cpu().numpy(), separator=', ')}\n")
+                f.write(f"Visual: {np.array2string(vi1.detach().cpu().numpy(), separator=', ')}\n\n")
 
         txt, au, vi = self._encode(txt, au, vi, lengths)
         fused = self._fuse(txt, au, vi, lengths)
@@ -675,9 +678,9 @@ class AVTClassifier(nn.Module):
         num_classes=1,
         mask_index=1,  # Add mask_index parameter
         mask_dropout=0.0,  # Add mask_dropout parameter
-        inference = False
+        plot_embeddings = False
     ):
-        self.inference = inference
+        self.plot_embeddings = plot_embeddings
         super(AVTClassifier, self).__init__()
 
         self.encoder = AVTEncoder(
@@ -712,9 +715,9 @@ class AVTClassifier(nn.Module):
     def set_mask_dropout(self, new_mask_dropout):
         """Updates mask_dropout for all Feedback ."""
         self.encoder.set_mask_dropout(new_mask_dropout)
-    def forward(self, inputs):
+    def forward(self, inputs, plot_embeddings):
         out,mask_txt,mask_au,mask_vi = self.encoder(
-            inputs["text"], inputs["audio"], inputs["visual"], inputs["lengths"], self.inference
+            inputs["text"], inputs["audio"], inputs["visual"], inputs["lengths"], plot_embeddings
         )
 
         return self.classifier(out),mask_txt,mask_au,mask_vi

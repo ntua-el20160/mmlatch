@@ -234,34 +234,53 @@ def print_separator(
 
 
 # ==== Function to parse embeddings from text files ====
+import numpy as np
+
 def parse_embeddings(filename):
-    embeddings = {"text_before": [], "text_after": [],
-                  "audio_before": [], "audio_after": [],
-                  "visual_before": [], "visual_after": []}
-    
-    current_key = None
+    embeddings = {
+        "text_before": [], "text_after": [],
+        "audio_before": [], "audio_after": [],
+        "visual_before": [], "visual_after": []
+    }
+
+    mode = None  # Track whether it's "before" or "after"
+    current_key = None  # Track whether it's text, audio, or visual
+
     with open(filename, "r") as f:
         for line in f:
+            line = line.strip()
+
+            # Identify whether it's before or after applying the mask
             if "Before Applying Mask" in line:
                 mode = "before"
             elif "After Applying Mask" in line:
                 mode = "after"
+            
+            # Identify which modality (text/audio/visual) is being logged
             elif "Text:" in line:
                 current_key = f"text_{mode}"
             elif "Audio:" in line:
                 current_key = f"audio_{mode}"
             elif "Visual:" in line:
                 current_key = f"visual_{mode}"
-            elif current_key:
-                # Extract numbers from the line and convert to numpy array
-                array_data = np.array(eval(line.strip()))
-                embeddings[current_key].extend(array_data)
+            
+            # Process the actual data line
+            elif current_key and line.startswith("["):  # Ensures it's a numpy-like array
+                try:
+                    array_data = np.fromstring(line[1:-1], sep=",")  # Convert string to NumPy array
+                    embeddings[current_key].append(array_data)  # Append the entire array
+                except Exception as e:
+                    print(f"Error parsing line: {line} -> {e}")
     
-    # Convert to numpy arrays
+    # Convert lists of arrays into numpy arrays
     for key in embeddings:
-        embeddings[key] = np.array(embeddings[key])
-    
+        if embeddings[key]:  # Ensure there's data to concatenate
+            embeddings[key] = np.vstack(embeddings[key])  # Stack lists into a 2D NumPy array
+        else:
+            embeddings[key] = np.array([])  # Handle empty cases
+
     return embeddings
+
 
 # ==== Function to bin predictions ====
 def bin_predictions(predictions):

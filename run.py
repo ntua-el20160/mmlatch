@@ -383,7 +383,7 @@ if __name__ == "__main__":
             retain_graph=C["trainer"]["retain_graph"],
             loss_fn=criterion,
             device=C["device"],
-            inference=True
+            plot_embeddings=C["model"]["plot_embeddings"]
             
         )
         #UPDATE MASK INDEX HERE IF NEEDED
@@ -391,29 +391,30 @@ if __name__ == "__main__":
         trainer.set_mask_dropout(C["model"]["mask_dropout_test"])
         predictions, targets,masks_txt,masks_au,masks_vi = trainer.predict(test_loader)
         
+        if C["model"]["plot_embeddings"]:
+            print("Plotting Embeddings...\n\n")
+            embeddings = parse_embeddings(filepath)
+            
+            data = {
+            "text": {"before": embeddings["text_before"], "after": embeddings["text_after"]},
+            "audio": {"before": embeddings["audio_before"], "after": embeddings["audio_after"]},
+            "visual": {"before": embeddings["visual_before"], "after": embeddings["visual_after"]}
+            }
 
-        embeddings = parse_embeddings(filepath)
-        
-        data = {
-        "text": {"before": embeddings["text_before"], "after": embeddings["text_after"]},
-        "audio": {"before": embeddings["audio_before"], "after": embeddings["audio_after"]},
-        "visual": {"before": embeddings["visual_before"], "after": embeddings["visual_after"]}
-        }
+            import matplotlib.pyplot as plt
 
-        import matplotlib.pyplot as plt
+            fig, axes = plt.subplots(3, 2, figsize=(12, 12))
 
-        fig, axes = plt.subplots(3, 2, figsize=(12, 12))
+            my_targets = torch.cat(targets)
+            binned_targets = bin_predictions(my_targets)
 
-        my_targets = torch.cat(targets)
-        binned_targets = bin_predictions(my_targets)
+            plot_umap(data["text"], binned_targets, "Text Embeddings (Before Mask)", "Text Embeddings (After Mask)", axes[0, 0], axes[0, 1])
+            plot_umap(data["audio"], binned_targets, "Audio Embeddings (Before Mask)", "Audio Embeddings (After Mask)", axes[1, 0], axes[1, 1])
+            plot_umap(data["visual"], binned_targets, "Visual Embeddings (Before Mask)", "Visual Embeddings (After Mask)", axes[2, 0], axes[2, 1])
 
-        plot_umap(data["text"], binned_targets, "Text Embeddings (Before Mask)", "Text Embeddings (After Mask)", axes[0, 0], axes[0, 1])
-        plot_umap(data["audio"], binned_targets, "Audio Embeddings (Before Mask)", "Audio Embeddings (After Mask)", axes[1, 0], axes[1, 1])
-        plot_umap(data["visual"], binned_targets, "Visual Embeddings (Before Mask)", "Visual Embeddings (After Mask)", axes[2, 0], axes[2, 1])
-
-        plt.tight_layout()
-        plt.savefig(f"results_umap/umap_visualization_{filepath}.png", dpi=300)  # Save as PNG
-        plt.show()
+            plt.tight_layout()
+            plt.savefig(f"results_umap/umap_visualization_{filepath}.png", dpi=300)  # Save as PNG
+            plt.show()
 
 
 

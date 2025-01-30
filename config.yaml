@@ -25,6 +25,7 @@ model:
   mask_index_test: 1
   mask_dropout_train: 0.0
   mask_dropout_test: 0.0
+  plot_embeddings: true
 
 experiment:
   name: base-test
