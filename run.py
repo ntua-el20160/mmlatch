@@ -171,34 +171,7 @@ if __name__ == "__main__":
     dev_loader = create_dataloader(dev)
     test_loader = create_dataloader(test)
     print("Running with feedback = {}".format(C["model"]["feedback"]))
-    """
-    text_cfg = {
-            "input_size": C["model"]["text_input_size"], "hidden_size": C["model"]["projection_size"], "layers": C["model"]["text_layers"], "bidirectional": C["model"]["bidirectional"],
-            "dropout": C["model"]["dropout"], "rnn_type": "lstm", "attention": C["model"]["attention"]
-        }
-    audio_cfg = {
-            "input_size": C["model"]["audio_input_size"], "hidden_size": C["model"]["projection_size"], "layers": C["model"]["audio_layers"], "bidirectional": C["model"]["bidirectional"],
-            "dropout": C["model"]["dropout"], "rnn_type": "lstm", "attention": C["model"]["attention"]
-        }
-    visual_cfg = {
-            "input_size": C["model"]["visual_input_size"], "hidden_size": C["model"]["projection_size"], "layers": C["model"]["visual_layers"], "bidirectional": C["model"]["bidirectional"],
-            "dropout": C["model"]["dropout"], "rnn_type": "lstm", "attention": C["model"]["attention"]
-        }
-    fuse_cfg = {
-        "projection_size": C["model"]["projection_size"], "feedback_type": C["model"]["feedback_type"]
-    }
-    model = AudioVisualTextClassifier(
-        audio_cfg=audio_cfg,
-        text_cfg=text_cfg,
-        visual_cfg=visual_cfg,
-        fuse_cfg=fuse_cfg,
-        modalities=["text", "audio", "visual"],
-        num_classes=C["num_classes"],
-        feedback=C["model"]["feedback"],
-        device=C["device"],
-    
-    )
-    """
+
     model = AVTClassifier(
         C["model"]["text_input_size"],
         C["model"]["audio_input_size"],

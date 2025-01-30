@@ -26,7 +26,8 @@ model:
   mask_dropout_train: 0.0
   mask_dropout_test: 0.0
   noise_type: "none"
-  noise_percentage: 0.0
+  noise_percentage_train: 0.0
+  noise_percentage_test: 0.0
   noise_modality: "all"
 experiment:
   name: max-deviation-test
