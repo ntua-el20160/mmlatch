@@ -336,6 +336,7 @@ if __name__ == "__main__":
             accumulation_steps=acc_steps,
             lr_scheduler=lr_scheduler,
             device=C["device"],
+            enable_plot_embeddings=False # we enable this flag only at test trainer (if it is true  in the config file)
         )
 
     if C["debug"]:
