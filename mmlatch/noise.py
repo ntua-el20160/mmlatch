@@ -62,7 +62,6 @@ def add_noise(dataset, noise_type='none', noise_modality='all', noise_level=0):
 
     ds = copy.deepcopy(dataset)
     modalities = ['text', 'audio', 'visual']
-
     if noise_type == 'gaussian':
         for i in range(len(ds)):
             if noise_modality == 'all':
@@ -82,4 +81,18 @@ def add_noise(dataset, noise_type='none', noise_modality='all', noise_level=0):
     elif noise_type == 'shuffle':
         ds = shuffle_modalities(ds, modality_to_shuffle=noise_modality, shuffle_prob=noise_level)
     
+    elif noise_type == 'all':
+        noise_level_gaussian  = noise_level[0]
+        noise_level_dropout = noise_level[1]
+        noise_level_shuffle = noise_level[2]
+        for i in range(len(ds)):
+            if noise_modality == 'all':
+                for modality in modalities:
+                    ds[i][modality] = add_gaussian_noise(ds[i][modality], noise_level_gaussian)
+                    ds[i][modality] = add_dropout_noise(ds[i][modality], noise_level_dropout)
+            else:
+                ds[i][noise_modality] = add_gaussian_noise(ds[i][noise_modality], noise_level_gaussian)
+                ds[i][noise_modality] = add_dropout_noise(ds[i][noise_modality], noise_level_dropout)
+        ds = shuffle_modalities(ds, modality_to_shuffle=noise_modality, shuffle_prob=noise_level_shuffle)
+
     return ds
