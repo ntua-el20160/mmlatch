@@ -38,7 +38,7 @@ class Trainer(object):
         retain_graph: bool = False, #retain computation graph after backprop
         dtype: torch.dtype = torch.float,
         device: str = "cpu",
-        enable_plot_embeddings: bool = True,  # New plot_embeddings mode flag
+        enable_plot_embeddings: bool = False,  # New plot_embeddings mode flag
     ) -> None:
         self.dtype = dtype
         self.retain_graph = retain_graph

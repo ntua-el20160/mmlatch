@@ -236,36 +236,42 @@ def print_separator(
 
 # ==== Function to bin predictions ====
 def bin_predictions(predictions):
-    if isinstance(predictions, torch.Tensor):  # Check if input is a tensor
-        predictions = predictions.detach().cpu().numpy()  # Move to CPU & convert to NumPy
+    if isinstance(predictions, torch.Tensor):  # Convert tensor to NumPy
+        predictions = predictions.detach().cpu().numpy()
 
     bins = [-np.inf, -2.5, -1.5, -0.5, 0.5, 1.5, 2.5, np.inf]
-    labels = [-3, -2, -1, 0, 1, 2, 3]
+    labels = np.array([-3, -2, -1, 0, 1, 2, 3])
 
-    return np.digitize(predictions, bins, right=True) - 1  # Adjust index
+    bin_indices = np.digitize(predictions, bins, right=True) - 1  # Adjust indices
+    return labels[bin_indices]  # Map to correct labels
+
 
 # ==== Function to plot UMAP embeddings ====
 def plot_umap(embeddings, predictions, title_before, title_after, ax1, ax2, save_path):
+    # Convert predictions to NumPy if it's a tensor
+    if torch.is_tensor(predictions):
+        predictions = predictions.cpu().numpy()
+    
     reducer = umap.UMAP(n_neighbors=15, min_dist=0.1, metric="cosine", random_state=42)
-
+    
     # Fit and transform embeddings
     embedding_before = reducer.fit_transform(embeddings["before"])
     embedding_after = reducer.fit_transform(embeddings["after"])
-
+    
     # Scatter plots
-    cmap = sns.color_palette("husl", 7)  # 7 color bins
     scatter1 = ax1.scatter(embedding_before[:, 0], embedding_before[:, 1], c=predictions, cmap="viridis", alpha=0.7)
     scatter2 = ax2.scatter(embedding_after[:, 0], embedding_after[:, 1], c=predictions, cmap="viridis", alpha=0.7)
-
+    
     # Titles and aesthetics
     ax1.set_title(title_before)
     ax2.set_title(title_after)
     ax1.set_xticks([]), ax1.set_yticks([])
     ax2.set_xticks([]), ax2.set_yticks([])
-
+    
     # Add colorbars
     plt.colorbar(scatter1, ax=ax1, label="Binned Prediction Labels")
     plt.colorbar(scatter2, ax=ax2, label="Binned Prediction Labels")
+    
     if save_path:
         plt.savefig(save_path, bbox_inches="tight", dpi=300)
         print(f"Figure saved to {save_path}")

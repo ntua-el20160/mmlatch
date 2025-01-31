@@ -648,7 +648,7 @@ class AVTEncoder(nn.Module):
         return fused
 
     def forward(self, txt, au, vi, lengths, enable_plot_embeddings):
-        print(f"self.batch_idx: {self.batch_idx}")
+        #print(f"self.batch_idx: {self.batch_idx}")
         
         if self.feedback:
             txt1, au1, vi1 = self._encode(txt, au, vi, lengths)
@@ -673,9 +673,18 @@ class AVTEncoder(nn.Module):
 
     
     def compute_metrics(self, embeddings, labels):
-        # Reduce embeddings to match label count using mean pooling
+
+        if torch.is_tensor(embeddings):
+            embeddings = embeddings.cpu().numpy()
+        if torch.is_tensor(labels):
+            labels = labels.cpu().numpy()
+        # Check for NaN or Inf
+        if np.isnan(embeddings).any() or np.isinf(embeddings).any():
+            print("Warning: Embeddings contain NaN or Inf. Skipping metric computation.")
+            embeddings = self.fix_nan_inf(embeddings)
+
+        # Reduce embeddings to match label count if necessary
         if embeddings.shape[0] != labels.shape[0]:
-            # Assuming first dimension is batch, second is sequence length
             embeddings = embeddings.reshape(1, -1)
         
         if embeddings.shape[0] < 2 or len(set(labels)) < 2:
@@ -683,6 +692,8 @@ class AVTEncoder(nn.Module):
         
         silhouette = silhouette_score(embeddings, labels)
         mean_cosine_similarity = np.mean(cosine_similarity(embeddings))
+
+        
         
         return silhouette, mean_cosine_similarity
 
@@ -690,6 +701,46 @@ class AVTEncoder(nn.Module):
         min_dim = min(emb.shape[1] for emb in embeddings_list)  # Find minimum feature dimension
         return [emb[:, :min_dim] for emb in embeddings_list]  # Truncate all to the same size
     
+
+    def fix_nan_inf(self, embeddings):
+        """
+        Intelligently replace NaNs and Infs in embeddings:
+        - NaNs are replaced with the mean of the non-NaN values in the corresponding dimension
+        - Infs are replaced with the max/min finite value based on the sign
+        """
+        # Create a copy to avoid modifying the original array
+        fixed_embeddings = embeddings.copy()
+        
+        # Handle NaNs
+        for dim in range(fixed_embeddings.shape[1]):
+            column = fixed_embeddings[:, dim]
+            nan_mask = np.isnan(column)
+            
+            if nan_mask.any():
+                # Replace NaNs with the mean of non-NaN values in that dimension
+                non_nan_mean = np.nanmean(column)
+                fixed_embeddings[nan_mask, dim] = non_nan_mean
+        
+        # Handle Infs
+        for dim in range(fixed_embeddings.shape[1]):
+            column = fixed_embeddings[:, dim]
+            pos_inf_mask = np.isinf(column) & (column > 0)
+            neg_inf_mask = np.isinf(column) & (column < 0)
+            
+            if pos_inf_mask.any():
+                # Replace positive infinities with the max finite value
+                max_finite = np.max(column[~np.isinf(column)])
+                fixed_embeddings[pos_inf_mask, dim] = max_finite
+            
+            if neg_inf_mask.any():
+                # Replace negative infinities with the min finite value
+                min_finite = np.min(column[~np.isinf(column)])
+                fixed_embeddings[neg_inf_mask, dim] = min_finite
+        
+        return fixed_embeddings
+
+
+
     def plot_embeddings(self, targets, results_dir):
         
         if not self.all_txt_embeddings_before:
@@ -699,7 +750,8 @@ class AVTEncoder(nn.Module):
         
         modalities = ['txt', 'au', 'vi']
         fig, axes = plt.subplots(3, 2, figsize=(12, 18))
-        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # Format: YYYYMMDD_HHMMSS
+        save_path = f"{results_dir}/embeddings_mask_{self.mask_index}_{timestamp}.png"
 
         for i, modality in enumerate(modalities):
 
@@ -707,7 +759,7 @@ class AVTEncoder(nn.Module):
             before_list = getattr(self, f"all_{modality}_embeddings_before")
             after_list = getattr(self, f"all_{modality}_embeddings_after")
             
-            print(f"len(before_list): {len(before_list)}, len(before_list[0]): {len(before_list[0])}")
+            #print(f"len(before_list): {len(before_list)}, len(before_list[0]): {len(before_list[0])}")
 
             before_list = self.truncate_embeddings(before_list)
             after_list = self.truncate_embeddings(after_list)
@@ -715,23 +767,27 @@ class AVTEncoder(nn.Module):
             # Ensure embeddings are 2D
             before_2d = np.concatenate(before_list, axis=0)  # No reshape needed
             after_2d = np.concatenate(after_list, axis=0)
+
+            before_2d = self.fix_nan_inf(before_2d)
+            after_2d = self.fix_nan_inf(after_2d)
             
             embeddings_before = {
                 "before": before_2d,
                 "after": after_2d
             }
-
-            binned_targets = bin_predictions(targets)
+            #markogiannakisaris@gmail.com new email !!!
+            #binned_targets = bin_predictions(targets)
 
 
             # Compute metrics
-            silhouette_before, cos_sim_before = self.compute_metrics(embeddings_before["before"], binned_targets)
-            silhouette_after, cos_sim_after = self.compute_metrics(embeddings_before["after"], binned_targets) 
+            silhouette_before, cos_sim_before = self.compute_metrics(embeddings_before["before"], targets)
+            silhouette_after, cos_sim_after = self.compute_metrics(embeddings_before["after"], targets) 
+            print(f"Silhoute score before: {silhouette_before}")
+            print(f"silhouette score after {silhouette_after}")
+            print(f"cosine sim before: {cos_sim_before}")
+            print(f"cosine similarity sfter {cos_sim_after}")
             
-
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # Format: YYYYMMDD_HHMMSS
-            save_path = f"{results_dir}/embeddings_{modality}_mask_{self.mask_index}_{timestamp}.png"
-            plot_umap(embeddings_before, binned_targets, f"{modality.upper()} Embeddings Before\nSilhouette: {silhouette_before:.2f}, Cosine Sim: {cos_sim_before:.2f}", 
+            plot_umap(embeddings_before, targets, f"{modality.upper()} Embeddings Before\nSilhouette: {silhouette_before:.2f}, Cosine Sim: {cos_sim_before:.2f}", 
                    f"{modality.upper()} Embeddings After\nSilhouette: {silhouette_after:.2f}, Cosine Sim: {cos_sim_after:.2f}", axes[i, 0], axes[i, 1], save_path)
         
         plt.tight_layout()
