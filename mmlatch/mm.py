@@ -54,14 +54,14 @@ class FeedbackUnit(nn.Module):
             mask =mask2
         elif(used_z == False):
             mask = mask1
-        elif self.mask_index == 1 or self.mask_index == 4:
+        elif self.mask_index == 1 or self.mask_index == 4 or self.mask_index == 6:
             mask = (mask1 + mask2) * 0.5
         elif self.mask_index == 2:
             mask = torch.max(mask1, mask2)
         elif self.mask_index == 3:
             mask = torch.min(mask1, mask2)
         elif self.mask_index == 5:
-            mask = torch.max(torch.abs(mask1 - 0.5), torch.abs(mask2 - 0.5))
+            mask = torch.where(torch.abs(mask1 - 0.5) > torch.abs(mask2 - 0.5), mask1, mask2)
         else:
             raise ValueError("Invalid mask_index. Must be between 1 and 5.")
 
@@ -93,7 +93,8 @@ class FeedbackUnit(nn.Module):
         elif self.mask_index == 4:
             mask = (mask1 + mask2) * 0.5 + 1  
         elif self.mask_index == 5:
-            mask = torch.max(torch.abs(mask1 - 0.5), torch.abs(mask2 - 0.5))
+            mask = torch.where(torch.abs(mask1 - 0.5) > torch.abs(mask2 - 0.5), mask1, mask2)
+
         else:
             raise ValueError("Invalid mask_index. Must be between 1 and 5.")
 
@@ -105,7 +106,7 @@ class FeedbackUnit(nn.Module):
         Args:
             new_mask_index (int): New mask index value (1 to 5).
         """
-        if new_mask_index not in [1, 2, 3, 4, 5]:
+        if new_mask_index not in [1, 2, 3, 4, 5, 6]:
             raise ValueError("mask_index must be an integer between 1 and 5.")
         self.mask_index = new_mask_index
 
@@ -114,9 +115,13 @@ class FeedbackUnit(nn.Module):
         mask,mask1 = self.get_mask(y, z, lengths=lengths,used_y=used_y,used_z=used_z)
         mask = F.dropout(mask, p=0.2) #apply dropout to the mask
         if(self.mask_index == 4): # add the residual part after dropout
-            x_new = (x *( mask+1))
+            x_new = x/3 + x*mask
+        if(self.mask_index == 6):
+            x_new = x
         else:
             x_new = x * mask
+        
+        
         #return x_new,mask1
         return x_new,mask
 

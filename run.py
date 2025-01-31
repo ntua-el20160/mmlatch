@@ -81,8 +81,8 @@ def get_parser():
         dest="model.mask_index_test",
         default=1,
         type=int,
-        choices=[1, 2, 3, 4, 5],
-        help="Masking strategy index (1: average, 2: max, 3: min, 4: residual, 5: max deviation from 0.5)",
+        choices=[1, 2, 3, 4, 5, 6],
+        help="Masking strategy index (1: average, 2: max, 3: min, 4: residual, 5: max deviation from 0.5, 6: no mmlatch)",
     )
 
     parser.add_argument( #Defines the number of classes
@@ -178,16 +178,17 @@ if __name__ == "__main__":
         d["text"] = d["glove"]
 
     # Add noise
+    
     train = add_noise(train,
                       noise_type=C['model']['noise_type'], 
                       noise_modality=C['model']['noise_modality'], 
                       noise_level=C['model']['noise_percentage_train']
                       )
-    test = add_noise(test, 
-                    noise_type=C['model']['noise_type'], 
-                    noise_modality=C['model']['noise_modality'], 
-                    noise_level=C['model']['noise_percentage_test']
-                    )
+    #train = append_noise(train,
+    #                  noise_type=C['model']['noise_type'], 
+    #                  noise_modality=C['model']['noise_modality'], 
+    #                  noise_level=C['model']['noise_percentage_train']
+    #                  )
 
     #converts data to tensors
     to_tensor = ToTensor(device="cpu")
@@ -463,9 +464,61 @@ if __name__ == "__main__":
                 title=f"Averaged{modality}  Masks per Prediction for {experiment_name}",
                 ylabel= 'Prediction'
             )
-        predictions_distr_new,predictions_distr_comparison,targets_distr =prediction_count(data, comparison_filepath)
+        predictions_distr_new,predictions_distr_comparison,targets_distr = prediction_count(data, comparison_filepath)
 
         save_histogram_data(predictions_distr_new, predictions_distr_comparison, targets_distr, results_dir, experiment_name)
+        
+
+        # Add noise to the test set and evaluate the model
+        noise_types = [ "gaussian", "dropout", "shuffle",'all'] #all noise types
+        noise_modalities = ["text", "audio", "visual","all"] #all modalities
+        noise_levels = {}
+        noise_levels['high'] = [0.01, 0.15, 0.15, [0.01, 0.15, 0.15]]  # Fourth element is a list
+        noise_levels['low'] = [0.1, 0.4, 0.4, [0.1, 0.4, 0.4]]
+
+        for modality in noise_modalities:
+            for level in ['high', 'low']:
+                for i,noise in enumerate(noise_types):
+                    # if we train with noise, we only want to test with the same noise and all types of noises
+                    if(C['model']['noise_type'] != 'none' and C['model']['noise_type'] != noise and noise != 'all'):
+                        continue
+  
+                    test_noise = add_noise(test,
+                        noise_type=noise, 
+                        noise_modality=modality, 
+                        noise_level=noise_levels[level][i]
+                    )
+                    
+                    test_loader = create_dataloader(test_noise)
+
+                    predictions, targets,masks_txt,masks_au,masks_vi = trainer.predict(test_loader)
+
+                    pred = torch.cat(predictions)
+                    y_test = torch.cat(targets)
+                    data = {
+                        'predictions': pred.cpu().numpy(),      # Removed torch.cat
+                        'targets': y_test.cpu().numpy(),        # Removed torch.cat
+                        'masks_txt': [mask.cpu().numpy() for mask in masks_txt],
+                        'masks_au': [mask.cpu().numpy() for mask in masks_au],
+                        'masks_vi': [mask.cpu().numpy() for mask in masks_vi],
+                    }
+
+                    metrics = eval_mosei_senti(pred, y_test, True)
+                    avg_metrics, _, _,_ = compare_masks(data, comparison_filepath)
+
+                    print(f"Metrics on test set with {level} of {noise} noise at the {modality} modality")
+                    print_metrics(metrics)
+                    print_metrics(avg_metrics)
+
+                    fname = f'results_{modality}_{noise}_{level}'
+                    results_file = os.path.join(results_dir + f"/numeric_results", fname)
+                    save_metrics(metrics, results_file)
+
+                    fname2 = fname + "_masks"
+                    results_file = os.path.join(results_dir + f"/numeric_results", fname2)
+                    save_metrics(avg_metrics, results_file)
+
+       
 
 
 
