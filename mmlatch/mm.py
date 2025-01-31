@@ -4,6 +4,14 @@ import torch.nn.functional as F
 import datetime
 import numpy as np
 
+import numpy as np
+import torch
+import umap
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+from util import plot_umap, bin_predictions
+
 np.set_printoptions(threshold=np.inf)  # Ensures full array printing
 
 from mmlatch.attention import Attention, SymmetricAttention
@@ -547,6 +555,14 @@ class AVTEncoder(nn.Module):
         super(AVTEncoder, self).__init__()
         self.feedback = feedback
 
+        self.all_txt_embeddings_before = []
+        self.all_au_embeddings_before = []
+        self.all_vi_embeddings_before = []
+
+        self.all_txt_embeddings_after = []
+        self.all_au_embeddings_after = []
+        self.all_vi_embeddings_after = []
+
         self.text = UnimodalEncoder(
             text_input_size,
             projection_size,
@@ -634,27 +650,47 @@ class AVTEncoder(nn.Module):
             txt1, au1, vi1 = self._encode(txt, au, vi, lengths)
 
             if plot_embeddigns:
-                with open(f"embedings_mask{self.mask_index}.txt", "a") as f:
-                    # Log embeddings before applying mask
-                     f.write(f"Batch {self.batch_idx} - Before Applying Mask:\n")
-                     f.write(f"Text: {np.array2string(txt1.detach().cpu().numpy(), separator=', ')}\n")
-                     f.write(f"Audio: {np.array2string(au1.detach().cpu().numpy(), separator=', ')}\n")
-                     f.write(f"Visual: {np.array2string(vi1.detach().cpu().numpy(), separator=', ')}\n\n")
+                self.all_txt_embeddings_before.append(txt1.detach().cpu().numpy())
+                self.all_au_embeddings_before.append(au1.detach().cpu().numpy())
+                self.all_vi_embeddings_before.append(vi1.detach().cpu().numpy())
 
+                
             txt, au, vi,mask_txt,mask_au,mask_vi = self.fm(txt, au, vi, txt1, au1, vi1, lengths=lengths)
 
         if plot_embeddigns:
-            # Log embeddings after applying mask
-            with open(f"embedings_mask{self.mask_index}.txt", "a") as f:
-                f.write(f"Batch {self.batch_idx} - After Applying Mask:\n")
-                f.write(f"Text: {np.array2string(txt1.detach().cpu().numpy(), separator=', ')}\n")
-                f.write(f"Audio: {np.array2string(au1.detach().cpu().numpy(), separator=', ')}\n")
-                f.write(f"Visual: {np.array2string(vi1.detach().cpu().numpy(), separator=', ')}\n\n")
-
+            self.all_txt_embeddings_after.append(txt.detach().cpu().numpy())
+            self.all_au_embeddings_after.append(au.detach().cpu().numpy())
+            self.all_vi_embeddings_after.append(vi.detach().cpu().numpy())
+            
         txt, au, vi = self._encode(txt, au, vi, lengths)
         fused = self._fuse(txt, au, vi, lengths)
         self.batch_idx += 1
         return fused,mask_txt,mask_au,mask_vi
+    
+    def plot_embeddings(self, targets):
+        
+        if not self.all_txt_embeddings_before:
+            print("No embeddings stored for plotting.")
+            return
+        
+        modalities = ['txt', 'au', 'vi']
+        fig, axes = plt.subplots(3, 2, figsize=(12, 18))
+        
+        for i, modality in enumerate(modalities):
+            embeddings_before = {
+                "before": np.concatenate(getattr(self, f"all_{modality}_embeddings_before"), axis=0),
+                "after": np.concatenate(getattr(self, f"all_{modality}_embeddings_after"), axis=0)
+            }
+            
+            binned_targets = bin_predictions(targets)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # Format: YYYYMMDD_HHMMSS
+            save_path = f"embeddings_{modality}_mask_{self.mask_index}_{timestamp}.png"
+            plot_umap(embeddings_before, binned_targets, f"{modality.upper()} Embeddings Before", f"{modality.upper()} Embeddings After", axes[i, 0], axes[i, 1], save_path)
+        
+        plt.tight_layout()
+        plt.show()
+
+
 
 
 class AVTClassifier(nn.Module):
@@ -721,3 +757,6 @@ class AVTClassifier(nn.Module):
         )
 
         return self.classifier(out),mask_txt,mask_au,mask_vi
+    
+    def plot_embeddings(self, targets):
+        self.encoder.plot_embeddings(targets)

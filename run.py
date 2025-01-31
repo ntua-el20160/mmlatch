@@ -353,23 +353,6 @@ if __name__ == "__main__":
         except:
             pass
 
-        def create_or_overwrite_file(filepath):
-            """Creates or overwrites a file.  Deletes the file first if it exists."""
-            try:
-                os.remove(filepath)  # Try to delete. No error if it doesn't exist.
-            except FileNotFoundError:
-                pass  # It's okay if the file wasn't there.
-
-            with open(filepath, "w") as f:  # 'w' mode creates or overwrites.
-                print(f"File '{filepath}' created or overwritten.")
-                
-
-
-        # Example usage:
-
-        filepath = f"embedings_mask{C['model']['mask_index_test']}.txt"  
-        create_or_overwrite_file(filepath)
-
         trainer = MOSEITrainer(
             model,
             optimizer,
@@ -392,29 +375,8 @@ if __name__ == "__main__":
         predictions, targets,masks_txt,masks_au,masks_vi = trainer.predict(test_loader)
         
         if C["model"]["plot_embeddings"]:
-            print("Plotting Embeddings...\n\n")
-            embeddings = parse_embeddings(filepath)
-            
-            data = {
-            "text": {"before": embeddings["text_before"], "after": embeddings["text_after"]},
-            "audio": {"before": embeddings["audio_before"], "after": embeddings["audio_after"]},
-            "visual": {"before": embeddings["visual_before"], "after": embeddings["visual_after"]}
-            }
-
-            import matplotlib.pyplot as plt
-
-            fig, axes = plt.subplots(3, 2, figsize=(12, 12))
-
-            my_targets = torch.cat(targets)
-            binned_targets = bin_predictions(my_targets)
-
-            plot_umap(data["text"], binned_targets, "Text Embeddings (Before Mask)", "Text Embeddings (After Mask)", axes[0, 0], axes[0, 1])
-            plot_umap(data["audio"], binned_targets, "Audio Embeddings (Before Mask)", "Audio Embeddings (After Mask)", axes[1, 0], axes[1, 1])
-            plot_umap(data["visual"], binned_targets, "Visual Embeddings (Before Mask)", "Visual Embeddings (After Mask)", axes[2, 0], axes[2, 1])
-
-            plt.tight_layout()
-            plt.savefig(f"results_umap/umap_visualization_{filepath}.png", dpi=300)  # Save as PNG
-            plt.show()
+            model.plot_embeddigns(torch.cat(targets))
+           
 
 
 

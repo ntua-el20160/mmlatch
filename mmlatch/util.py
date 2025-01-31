@@ -233,63 +233,19 @@ def print_separator(
     print_fn(symbol * n)
 
 
-# ==== Function to parse embeddings from text files ====
-import numpy as np
-
-def parse_embeddings(filename):
-    embeddings = {
-        "text_before": [], "text_after": [],
-        "audio_before": [], "audio_after": [],
-        "visual_before": [], "visual_after": []
-    }
-
-    mode = None  # Track whether it's "before" or "after"
-    current_key = None  # Track whether it's text, audio, or visual
-
-    with open(filename, "r") as f:
-        for line in f:
-            line = line.strip()
-
-            # Identify whether it's before or after applying the mask
-            if "Before Applying Mask" in line:
-                mode = "before"
-            elif "After Applying Mask" in line:
-                mode = "after"
-            
-            # Identify which modality (text/audio/visual) is being logged
-            elif "Text:" in line:
-                current_key = f"text_{mode}"
-            elif "Audio:" in line:
-                current_key = f"audio_{mode}"
-            elif "Visual:" in line:
-                current_key = f"visual_{mode}"
-            
-            # Process the actual data line
-            elif current_key and line.startswith("["):  # Ensures it's a numpy-like array
-                try:
-                    array_data = np.fromstring(line[1:-1], sep=",")  # Convert string to NumPy array
-                    embeddings[current_key].append(array_data)  # Append the entire array
-                except Exception as e:
-                    print(f"Error parsing line: {line} -> {e}")
-    
-    # Convert lists of arrays into numpy arrays
-    for key in embeddings:
-        if embeddings[key]:  # Ensure there's data to concatenate
-            embeddings[key] = np.vstack(embeddings[key])  # Stack lists into a 2D NumPy array
-        else:
-            embeddings[key] = np.array([])  # Handle empty cases
-
-    return embeddings
-
 
 # ==== Function to bin predictions ====
 def bin_predictions(predictions):
+    if isinstance(predictions, torch.Tensor):  # Check if input is a tensor
+        predictions = predictions.detach().cpu().numpy()  # Move to CPU & convert to NumPy
+
     bins = [-np.inf, -2.5, -1.5, -0.5, 0.5, 1.5, 2.5, np.inf]
     labels = [-3, -2, -1, 0, 1, 2, 3]
+
     return np.digitize(predictions, bins, right=True) - 1  # Adjust index
 
 # ==== Function to plot UMAP embeddings ====
-def plot_umap(embeddings, predictions, title_before, title_after, ax1, ax2):
+def plot_umap(embeddings, predictions, title_before, title_after, ax1, ax2, save_path):
     reducer = umap.UMAP(n_neighbors=15, min_dist=0.1, metric="cosine", random_state=42)
 
     # Fit and transform embeddings
@@ -310,3 +266,6 @@ def plot_umap(embeddings, predictions, title_before, title_after, ax1, ax2):
     # Add colorbars
     plt.colorbar(scatter1, ax=ax1, label="Binned Prediction Labels")
     plt.colorbar(scatter2, ax=ax2, label="Binned Prediction Labels")
+    if save_path:
+        plt.savefig(save_path, bbox_inches="tight", dpi=300)
+        print(f"Figure saved to {save_path}")
