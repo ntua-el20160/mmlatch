@@ -1,3 +1,9 @@
+"""
+Does exactly the same job as run.py but saves the results in a pickle (see save_comparison_data_pickle())
+These can be used in later experiments for comparison.
+Make sure to run this file unsing the base-test config file (configs/config.yamls)
+"""
+
 import argparse
 import os
 import sys
@@ -418,8 +424,10 @@ if __name__ == "__main__":
         results_file2 = os.path.join(results_dir + f"/numeric_results", fname2)
         save_metrics(metrics, results_file)
 
+        # Save the comparison data
         comparison_filename = f"comparison_mask.pkl"
         comparison_filepath = os.path.join(C["results_dir"], comparison_filename)
+        save_comparison_data_pickle(comparison_filepath, pred, y_test, masks_txt, masks_au, masks_vi)
 
         data = {
     'predictions': pred.cpu().numpy(),      # Removed torch.cat
