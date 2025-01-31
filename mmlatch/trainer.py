@@ -38,7 +38,7 @@ class Trainer(object):
         retain_graph: bool = False, #retain computation graph after backprop
         dtype: torch.dtype = torch.float,
         device: str = "cpu",
-        plot_embeddings: bool = False,  # New plot_embeddings mode flag
+        enable_plot_embeddings: bool = True,  # New plot_embeddings mode flag
     ) -> None:
         self.dtype = dtype
         self.retain_graph = retain_graph
@@ -49,7 +49,7 @@ class Trainer(object):
         self.patience = patience
         self.accumulation_steps = accumulation_steps
         self.checkpoint_dir = checkpoint_dir
-        self.plot_embeddings = plot_embeddings  # Store plot_embeddings mode flag
+        self.enable_plot_embeddings = enable_plot_embeddings  # Store plot_embeddings mode flag
         
         #validates the checkpoint paths
         model_checkpoint = self._check_checkpoint(model_checkpoint)
@@ -156,7 +156,7 @@ class Trainer(object):
         self: TrainerType, batch: List[torch.Tensor]
     ) -> Tuple[torch.Tensor, ...]:
         inputs, targets = self.parse_batch(batch) #extracts inputs and targets from the batch
-        y_pred,mask_txt,mask_au,mask_vi = self.model(inputs, self.plot_embeddings) #predicts the output
+        y_pred,mask_txt,mask_au,mask_vi = self.model(inputs, self.enable_plot_embeddings) #predicts the output
 
         return y_pred, targets,mask_txt,mask_au,mask_vi #returns the predicted output and the target
 
@@ -322,7 +322,7 @@ class MOSEITrainer(Trainer):#inherits from the Trainer class and specialises 2 f
     ) -> Tuple[torch.Tensor, ...]:
         inputs, targets = self.parse_batch(batch)
         #y_pred = self.model(inputs)
-        y_pred,mask_txt,mask_au,mask_vi = self.model(inputs, self.plot_embeddings)
+        y_pred,mask_txt,mask_au,mask_vi = self.model(inputs, self.enable_plot_embeddings)
         y_pred = y_pred.squeeze()
         targets = targets.squeeze()
 

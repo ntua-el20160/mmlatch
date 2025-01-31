@@ -15,7 +15,7 @@ from mmlatch.config import load_config
 from mmlatch.data import MOSEI, MOSEICollator, ToTensor
 from mmlatch.mm import AudioVisualTextClassifier, AVTClassifier
 from mmlatch.trainer import MOSEITrainer
-from mmlatch.util import safe_mkdirs,  parse_embeddings, bin_predictions, plot_umap
+from mmlatch.util import safe_mkdirs
 
 
 class BCE(nn.Module):
@@ -366,7 +366,7 @@ if __name__ == "__main__":
             retain_graph=C["trainer"]["retain_graph"],
             loss_fn=criterion,
             device=C["device"],
-            plot_embeddings=C["model"]["plot_embeddings"]
+            enable_plot_embeddings=C["model"]["enable_plot_embeddings"]
             
         )
         #UPDATE MASK INDEX HERE IF NEEDED
@@ -374,8 +374,9 @@ if __name__ == "__main__":
         trainer.set_mask_dropout(C["model"]["mask_dropout_test"])
         predictions, targets,masks_txt,masks_au,masks_vi = trainer.predict(test_loader)
         
-        if C["model"]["plot_embeddings"]:
-            model.plot_embeddigns(torch.cat(targets))
+        if C["model"]["enable_plot_embeddings"]:
+            
+            model.plot_embeddings(torch.cat(targets), C["results_dir"])
            
 
 
