@@ -28,6 +28,7 @@ model:
   noise_type: "none"
   noise_percentage: 0.0
   noise_modality: "all"
+  enable_plot_embeddings: true
 
 experiment:
   name: base-to-deviation-test

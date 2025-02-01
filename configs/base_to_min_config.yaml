@@ -29,6 +29,7 @@ model:
   noise_percentage_train: 0.0
   noise_percentage_test: 0.0
   noise_modality: "all"
+  enable_plot_embeddings: true
 
 experiment:
   name: base-to-min-test
