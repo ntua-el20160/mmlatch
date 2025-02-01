@@ -1,6 +1,18 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from datetime import datetime
+import numpy as np
+
+import numpy as np
+import torch
+import umap
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+from mmlatch.util import plot_umap, truncate_embeddings, fix_nan_inf, compute_metrics_embeddings
+
+
 
 from mmlatch.attention import Attention, SymmetricAttention
 from mmlatch.rnn import RNN, AttentiveRNN
@@ -543,8 +555,17 @@ class AVTEncoder(nn.Module):
         mask_index=1,  # Add mask_index parameter
         mask_dropout=0.0,  # Add mask_dropout parameter
     ):
+        self.mask_index = mask_index
         super(AVTEncoder, self).__init__()
         self.feedback = feedback
+
+        self.all_txt_embeddings_before = []
+        self.all_au_embeddings_before = []
+        self.all_vi_embeddings_before = []
+
+        self.all_txt_embeddings_after = []
+        self.all_au_embeddings_after = []
+        self.all_vi_embeddings_after = []
 
         self.text = UnimodalEncoder(
             text_input_size,
@@ -586,7 +607,7 @@ class AVTEncoder(nn.Module):
             proj_sz=projection_size,
             device=device,
         )
-
+        self.batch_size = 0
         self.out_size = self.fuser.out_size
 
         if feedback:
@@ -627,15 +648,85 @@ class AVTEncoder(nn.Module):
 
         return fused
 
-    def forward(self, txt, au, vi, lengths):
+    def forward(self, txt, au, vi, lengths, enable_plot_embeddings):
+        
         if self.feedback:
             txt1, au1, vi1 = self._encode(txt, au, vi, lengths)
-            txt, au, vi,mask_txt,mask_au,mask_vi = self.fm(txt, au, vi, txt1, au1, vi1, lengths=lengths)
+
+            if enable_plot_embeddings:
+                # Apply mean pooling along the sequence dimension (dim=1)
+                self.all_txt_embeddings_before.append(txt1.mean(dim=1).detach().cpu().numpy())
+                self.all_au_embeddings_before.append(au1.mean(dim=1).detach().cpu().numpy())
+                self.all_vi_embeddings_before.append(vi1.mean(dim=1).detach().cpu().numpy())
+
+            txt, au, vi, mask_txt, mask_au, mask_vi = self.fm(txt, au, vi, txt1, au1, vi1, lengths=lengths)
+
+        if enable_plot_embeddings:
+            self.all_txt_embeddings_after.append(txt.mean(dim=1).detach().cpu().numpy())
+            self.all_au_embeddings_after.append(au.mean(dim=1).detach().cpu().numpy())
+            self.all_vi_embeddings_after.append(vi.mean(dim=1).detach().cpu().numpy())
 
         txt, au, vi = self._encode(txt, au, vi, lengths)
         fused = self._fuse(txt, au, vi, lengths)
 
-        return fused,mask_txt,mask_au,mask_vi
+        return fused, mask_txt, mask_au, mask_vi
+
+    
+    
+
+    def plot_embeddings(self, targets, results_dir):
+        if not self.all_txt_embeddings_before:
+            print("No embeddings stored for plotting.")
+            return
+
+        modalities = ['txt', 'au', 'vi']
+        fig, axes = plt.subplots(3, 2, figsize=(12, 18))
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  
+        save_path = f"{results_dir}/representations_plots/embeddings_mask_{self.mask_index}_{timestamp}.png"
+
+        # Round targets to nearest integer
+        targets = np.round(targets).astype(int)
+
+        for i, modality in enumerate(modalities):
+            before_list = getattr(self, f"all_{modality}_embeddings_before")
+            after_list = getattr(self, f"all_{modality}_embeddings_after")
+
+            before_list = truncate_embeddings(before_list)
+            after_list = truncate_embeddings(after_list)
+
+            before_2d = np.concatenate(before_list, axis=0)
+            after_2d = np.concatenate(after_list, axis=0)
+
+            before_2d = fix_nan_inf(before_2d)
+            after_2d = fix_nan_inf(after_2d)
+
+            embeddings_before = {"before": before_2d, "after": after_2d}
+
+            # Compute metrics (Silhouette + Davies-Bouldin)
+            silhouette_before, cos_sim_before, dbi_before = compute_metrics_embeddings(embeddings_before["before"], targets)
+            silhouette_after, cos_sim_after, dbi_after = compute_metrics_embeddings(embeddings_before["after"], targets)
+
+            print(f"Silhouette score before: {silhouette_before}")
+            print(f"Silhouette score after: {silhouette_after}")
+            print(f"Cosine similarity before: {cos_sim_before}")
+            print(f"Cosine similarity after: {cos_sim_after}")
+            print(f"Davies-Bouldin Index before: {dbi_before}")
+            print(f"Davies-Bouldin Index after: {dbi_after}")
+
+            plot_umap(
+                embeddings_before, 
+                targets,
+                f"{modality.upper()} Embeddings Before\nSilhouette: {silhouette_before:.2f}, Cosine Sim: {cos_sim_before:.2f}, DBI: {dbi_before:.2f}",
+                f"{modality.upper()} Embeddings After\nSilhouette: {silhouette_after:.2f}, Cosine Sim: {cos_sim_after:.2f}, DBI: {dbi_after:.2f}",
+                axes[i, 0], axes[i, 1], save_path
+            )
+
+        plt.tight_layout()
+        plt.show()
+    
+
+
+
 
 
 class AVTClassifier(nn.Module):
@@ -659,7 +750,9 @@ class AVTClassifier(nn.Module):
         num_classes=1,
         mask_index=1,  # Add mask_index parameter
         mask_dropout=0.0,  # Add mask_dropout parameter
+        enable_plot_embeddings = False
     ):
+        self.enable_plot_embeddings = enable_plot_embeddings
         super(AVTClassifier, self).__init__()
 
         self.encoder = AVTEncoder(
@@ -694,9 +787,12 @@ class AVTClassifier(nn.Module):
     def set_mask_dropout(self, new_mask_dropout):
         """Updates mask_dropout for all Feedback ."""
         self.encoder.set_mask_dropout(new_mask_dropout)
-    def forward(self, inputs):
+    def forward(self, inputs, enable_plot_embeddings):
         out,mask_txt,mask_au,mask_vi = self.encoder(
-            inputs["text"], inputs["audio"], inputs["visual"], inputs["lengths"]
+            inputs["text"], inputs["audio"], inputs["visual"], inputs["lengths"], enable_plot_embeddings
         )
 
         return self.classifier(out),mask_txt,mask_au,mask_vi
+    
+    def plot_embeddings(self, targets=None, results_dir=None):
+        self.encoder.plot_embeddings(targets, results_dir)

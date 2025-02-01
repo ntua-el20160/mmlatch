@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from ignite.metrics import Accuracy, Fbeta, Loss
 from torch.utils.data import DataLoader
+import numpy as np
 
 from mmlatch.cmusdk import mosei, mosi
 from mmlatch.config import load_config
@@ -353,6 +354,7 @@ if __name__ == "__main__":
             accumulation_steps=acc_steps,
             lr_scheduler=lr_scheduler,
             device=C["device"],
+            enable_plot_embeddings=False # we enable this flag only at test trainer (if it is true  in the config file)
         )
 
     if C["debug"]:
@@ -369,6 +371,7 @@ if __name__ == "__main__":
             del trainer
         except:
             pass
+
         trainer = MOSEITrainer(
             model,
             optimizer,
@@ -382,12 +385,22 @@ if __name__ == "__main__":
             retain_graph=C["trainer"]["retain_graph"],
             loss_fn=criterion,
             device=C["device"],
+            enable_plot_embeddings=C["model"]["enable_plot_embeddings"]
             
         )
         #UPDATE MASK INDEX HERE IF NEEDED
         trainer.set_mask_index(C["model"]["mask_index_test"])
         trainer.set_mask_dropout(C["model"]["mask_dropout_test"])
         predictions, targets,masks_txt,masks_au,masks_vi = trainer.predict(test_loader)
+        
+        if C["model"]["enable_plot_embeddings"]:
+            
+            model.plot_embeddings(torch.cat(targets), C["results_dir"])
+           
+
+
+
+
 
         # insert code to load
         pred = torch.cat(predictions)
