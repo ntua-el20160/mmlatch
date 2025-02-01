@@ -661,12 +661,14 @@ class AVTEncoder(nn.Module):
 
             txt, au, vi, mask_txt, mask_au, mask_vi = self.fm(txt, au, vi, txt1, au1, vi1, lengths=lengths)
 
+        txt, au, vi = self._encode(txt, au, vi, lengths)
+
         if enable_plot_embeddings:
             self.all_txt_embeddings_after.append(txt.mean(dim=1).detach().cpu().numpy())
             self.all_au_embeddings_after.append(au.mean(dim=1).detach().cpu().numpy())
             self.all_vi_embeddings_after.append(vi.mean(dim=1).detach().cpu().numpy())
 
-        txt, au, vi = self._encode(txt, au, vi, lengths)
+        
         fused = self._fuse(txt, au, vi, lengths)
 
         return fused, mask_txt, mask_au, mask_vi
