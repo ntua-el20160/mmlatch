@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from datetime import datetime
 import numpy as np
-
+import os
 import numpy as np
 import torch
 import umap
@@ -682,9 +682,16 @@ class AVTEncoder(nn.Module):
         modalities = ['txt', 'au', 'vi']
         fig, axes = plt.subplots(3, 2, figsize=(12, 18))
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  
-        save_path = f"{results_dir}/representations_plots/embeddings_mask_{self.mask_index}_{timestamp}.png"
+        # Ensure the directory exists before saving the file
+        save_dir = f"{results_dir}/plot-representations"
+        os.makedirs(save_dir, exist_ok=True)  # Creates the directory if it doesn't exist
+
+        # Define the full save path
+        save_path = f"{save_dir}/embeddings_mask_{self.mask_index}_{timestamp}.png"
 
         # Round targets to nearest integer
+        if torch.is_tensor(targets):
+            targets = targets.cpu().numpy()
         targets = np.round(targets).astype(int)
 
         for i, modality in enumerate(modalities):
