@@ -1,6 +1,8 @@
 import numpy as np
 import copy
 
+np.random.seed(42)
+
 def add_gaussian_noise(features, sigma=0.01):
     """
     Adds gasussian noise to the feature vectors of a modality.
@@ -96,3 +98,21 @@ def add_noise(dataset, noise_type='none', noise_modality='all', noise_level=0):
         ds = shuffle_modalities(ds, modality_to_shuffle=noise_modality, shuffle_prob=noise_level_shuffle)
 
     return ds
+
+def augment_with_noise(dataset, noise_type='none', noise_modality='all', noise_level=0):
+    """
+    Augments the dataset by adding noisy versions of the data to the dataset (makes sense for train).
+    noise_type = 'none', 'gaussian', 'dropout', 'shuffle'
+    noise_modality = 'all', 'text', 'audio', 'visual' (note that 'text'=='glove')
+    modifies dataset by reference
+    """
+    # Create a deep copy of the original dataset to avoid modifying it
+    original_dataset = copy.deepcopy(dataset)
+    
+    # Apply noise to the dataset
+    noisy_dataset = add_noise(dataset, noise_type, noise_modality, noise_level)
+    
+    # Combine the original dataset with the noisy dataset
+    augmented_dataset = original_dataset + noisy_dataset
+    
+    return augmented_dataset

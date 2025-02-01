@@ -16,7 +16,7 @@ from mmlatch.data import MOSEI, MOSEICollator, ToTensor
 from mmlatch.mm import AudioVisualTextClassifier, AVTClassifier
 from mmlatch.trainer import MOSEITrainer
 from mmlatch.util import safe_mkdirs
-from mmlatch.noise import add_noise
+from mmlatch.noise import add_noise, augment_with_noise
 
 
 class BCE(nn.Module):
@@ -134,6 +134,14 @@ def get_parser():
     )
 
     parser.add_argument( 
+        "--augment_train_data",
+        dest="model.augment_train_data",
+        default=False,
+        type=bool,
+        help="Determines whether to augment train data with noisy",
+    )
+ 
+    parser.add_argument( 
         "--noise-modality",
         dest="model.noise_modality",
         default="all",
@@ -179,12 +187,19 @@ if __name__ == "__main__":
         d["text"] = d["glove"]
 
     # Add noise
-    
-    train = add_noise(train,
+    if C['model']['augment_train_data']:
+        train = augment_with_noise(train,
                       noise_type=C['model']['noise_type'], 
                       noise_modality=C['model']['noise_modality'], 
                       noise_level=C['model']['noise_percentage_train']
                       )
+                
+    else:
+        train = add_noise(train,
+                          noise_type=C['model']['noise_type'], 
+                          noise_modality=C['model']['noise_modality'], 
+                          noise_level=C['model']['noise_percentage_train']
+                          )
     #train = append_noise(train,
     #                  noise_type=C['model']['noise_type'], 
     #                  noise_modality=C['model']['noise_modality'], 
