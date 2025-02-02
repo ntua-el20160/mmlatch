@@ -40,6 +40,9 @@ def shuffle_modalities(dataset, modality_to_shuffle="all", shuffle_prob=0.1):
     # Shuffle each modality
     for modality in modalities:
         # Collect all features for this modality across the dataset
+        print(f"Expected modality keys: {dataset[0].keys() if dataset else 'Empty Dataset'}") # DEBUGGING
+        print(f"Modality requested: {modality}") # DEBUGGING
+
         modality_features = [sample[modality] for sample in dataset]
 
         # Shuffle the features
