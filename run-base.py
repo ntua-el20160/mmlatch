@@ -437,7 +437,7 @@ if __name__ == "__main__":
     'masks_vi': [mask.cpu().numpy() for mask in masks_vi],
 }
 
-        avg_metrics, mean_mask_mod_target, diff_mask_mod_target,mean_mask_new_pred = compare_masks(data, comparison_filepath)
+        avg_metrics, mean_mask_mod_target, diff_mask_mod_target, mean_mask_new_pred = compare_masks(data, comparison_filepath)
 
         # Print average metrics
         print_metrics(avg_metrics)
@@ -471,7 +471,7 @@ if __name__ == "__main__":
                 title=f"Averaged{modality}  Masks per Prediction for {experiment_name}",
                 ylabel= 'Prediction'
             )
-        predictions_distr_new,predictions_distr_comparison,targets_distr =prediction_count(data, comparison_filepath)
+        predictions_distr_new, predictions_distr_comparison, targets_distr = prediction_count(data, comparison_filepath)
 
         save_histogram_data(predictions_distr_new, predictions_distr_comparison, targets_distr, results_dir, experiment_name)
 

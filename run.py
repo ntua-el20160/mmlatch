@@ -520,7 +520,7 @@ if __name__ == "__main__":
                     
                     test_loader = create_dataloader(test_noise)
 
-                    predictions, targets,masks_txt,masks_au,masks_vi = trainer.predict(test_loader)
+                    predictions, targets, masks_txt ,masks_au ,masks_vi = trainer.predict(test_loader)
 
                     pred = torch.cat(predictions)
                     y_test = torch.cat(targets)
