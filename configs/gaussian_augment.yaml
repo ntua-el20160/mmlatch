@@ -29,7 +29,7 @@ model:
   noise_percentage_train: 0.02
   noise_percentage_test: 0.0
   noise_modality: "all"
-  augment_data: True
+  augment_train_data: True
   enable_plot_embeddings: true
 
 experiment:

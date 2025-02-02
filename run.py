@@ -133,13 +133,13 @@ def get_parser():
         help="Percentage of noise on test set",
     )
 
-    parser.add_argument( 
+    parser.add_argument(
         "--augment_train_data",
         dest="model.augment_train_data",
-        default=False,
-        type=bool,
-        help="Determines whether to augment train data with noisy",
+        action="store_true",
+        help="Determines whether to augment train data with noise",
     )
+
  
     parser.add_argument( 
         "--noise-modality",
@@ -187,6 +187,7 @@ if __name__ == "__main__":
         d["text"] = d["glove"]
 
     # Add noise
+    # First check if train data is to be augmented with noisy data
     if C['model']['augment_train_data']:
         train = augment_with_noise(train,
                       noise_type=C['model']['noise_type'], 
