@@ -19,6 +19,42 @@ def add_dropout_noise(features, rate=0.5):
     mask = np.random.binomial(1, 1-rate, features.shape)
     return features * mask
 
+def pad_or_truncate(datum, goal_length):
+    """
+    Pads or truncates the input datum to match the goal_length.
+    
+    If the datum is shorter, it will be padded with zeros.
+    If it is longer, it will be truncated to match goal_length.
+
+    Args:
+        datum (numpy array): The input feature embedding.
+        goal_length (int): The desired length.
+
+    Returns:
+        numpy array: Padded or truncated array.
+    """
+    current_length = len(datum)
+    
+    if current_length < goal_length:
+        # Pad with zeros
+        padding = np.zeros((goal_length - current_length, datum.shape[1])) if datum.ndim == 2 else np.zeros(goal_length - current_length)
+        return np.concatenate((datum, padding), axis=0)
+    elif current_length > goal_length:
+        # Truncate to match the goal length
+        return datum[:goal_length]
+    return datum  # Return as-is if already the correct length
+
+def length_preserving_shuffler(datum1, datum2):
+    """
+    Ensures that datum2 matches the length of datum1 before replacement.
+    
+    datum1: current embedding (to be replaced)
+    datum2: replacing embedding
+    """
+    goal_length = len(datum1)
+    datum2_resized = pad_or_truncate(datum2, goal_length)
+    return datum2_resized  # Return the resized datum2
+
 def shuffle_modalities(dataset, modality_to_shuffle="all", shuffle_prob=0.1):
     """
     Shuffles modalities between samples to create out-of-context combinations.
@@ -30,7 +66,7 @@ def shuffle_modalities(dataset, modality_to_shuffle="all", shuffle_prob=0.1):
 
     Returns:
         list: Dataset with shuffled modalities.
-    """
+    """            
     # Determine which modalities to shuffle
     if modality_to_shuffle == "all":
         modalities = ["text", "audio", "visual"]
@@ -51,14 +87,15 @@ def shuffle_modalities(dataset, modality_to_shuffle="all", shuffle_prob=0.1):
         # Apply shuffled features to samples based on shuffle_prob
         for i, sample in enumerate(dataset):
             if np.random.rand() < shuffle_prob:
-                sample[modality] = modality_features[i]
+                sample[modality] = length_preserving_shuffler(sample[modality], modality_features[i])
+
 
     return dataset
 
-def add_noise(dataset, noise_type='none', noise_modality='all', noise_level=0):
+def add_noise(dataset, noise_type='none', noise_modality='all', noise_level=0, augment=False):
     """
     Adds noise to the selected dataset (test/train)
-    noise_type = 'none', 'gaussian', 'dropout', 'shuffle'
+    noise_type = 'none', 'gaussian', 'dropout', 'shuffle', 'all'
     noise_modality = 'all', 'text', 'audio', 'visual' (note that 'text'=='glove')
     modifies dataset by reference
     """
@@ -98,7 +135,10 @@ def add_noise(dataset, noise_type='none', noise_modality='all', noise_level=0):
                 ds[i][modality] = add_dropout_noise(add_gaussian_noise(ds[i][modality], noise_level_gaussian), noise_level_dropout)
         ds = shuffle_modalities(ds, modality_to_shuffle=noise_modality, shuffle_prob=noise_level_shuffle)
 
-    return ds
+    if augment:
+        return dataset + ds
+    else:
+        return ds
 
 def augment_with_noise(dataset, noise_type='none', noise_modality='all', noise_level=0):
     """
@@ -109,11 +149,11 @@ def augment_with_noise(dataset, noise_type='none', noise_modality='all', noise_l
     """
     # Create a deep copy of the original dataset to avoid modifying it
     original_dataset = copy.deepcopy(dataset)
-    
+    # another_original_dataset = copy.deepcopy(dataset)
     # Apply noise to the dataset
-    noisy_dataset = add_noise(dataset, noise_type, noise_modality, noise_level)
+    noisy_dataset = add_noise(original_dataset, noise_type, noise_modality, noise_level)
     
     # Combine the original dataset with the noisy dataset
-    augmented_dataset = original_dataset + noisy_dataset
+    augmented_dataset = another_original_dataset + noisy_dataset
     
     return augmented_dataset

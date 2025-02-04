@@ -23,6 +23,9 @@ from mmlatch.trainer import MOSEITrainer
 from mmlatch.util import safe_mkdirs
 from mmlatch.noise import add_noise
 
+# Fix generator seed for consistent DataLoader shuffling
+generator = torch.Generator()
+generator.manual_seed(42)  # Fixed seed
 
 class BCE(nn.Module):
     """Custom binary cross-entropy loss function"""
@@ -213,6 +216,7 @@ if __name__ == "__main__":
             pin_memory=C["dataloaders"]["pin_memory"],
             shuffle=shuffle,
             collate_fn=collate_fn,
+            generator=generator,
         )
 
         return dataloader
@@ -423,7 +427,9 @@ if __name__ == "__main__":
         fname2 = fname + "_masks"
         results_file2 = os.path.join(results_dir + f"/numeric_results", fname2)
         save_metrics(metrics, results_file)
-
+        if C["model"]["enable_plot_embeddings"]:
+            model.plot_embeddings(torch.cat(targets), C["results_dir"])
+            
         # Save the comparison data
         comparison_filename = f"comparison_mask.pkl"
         comparison_filepath = os.path.join(C["results_dir"], comparison_filename)

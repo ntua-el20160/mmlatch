@@ -18,7 +18,10 @@ from mmlatch.trainer import MOSEITrainer
 from mmlatch.util import safe_mkdirs
 from mmlatch.noise import add_noise, augment_with_noise
 
-
+# Fix generator seed for consistent DataLoader shuffling
+generator = torch.Generator()
+generator.manual_seed(42)  # Fixed seed
+    
 class BCE(nn.Module):
     """Custom binary cross-entropy loss function"""
     def __init__(self):
@@ -187,20 +190,12 @@ if __name__ == "__main__":
         d["text"] = d["glove"]
 
     # Add noise
-    # First check if train data is to be augmented with noisy data
-    if C['model']['augment_train_data']:
-        train = augment_with_noise(train,
-                      noise_type=C['model']['noise_type'], 
-                      noise_modality=C['model']['noise_modality'], 
-                      noise_level=C['model']['noise_percentage_train']
-                      )
-                
-    else:
-        train = add_noise(train,
-                          noise_type=C['model']['noise_type'], 
-                          noise_modality=C['model']['noise_modality'], 
-                          noise_level=C['model']['noise_percentage_train']
-                          )
+    train = add_noise(train,
+                        noise_type=C['model']['noise_type'], 
+                        noise_modality=C['model']['noise_modality'], 
+                        noise_level=C['model']['noise_percentage_train'],
+                        augment = C['model']['augment_train_data'],
+                        )
     #train = append_noise(train,
     #                  noise_type=C['model']['noise_type'], 
     #                  noise_modality=C['model']['noise_modality'], 
@@ -225,6 +220,7 @@ if __name__ == "__main__":
             pin_memory=C["dataloaders"]["pin_memory"],
             shuffle=shuffle,
             collate_fn=collate_fn,
+            generator=generator,
         )
 
         return dataloader
@@ -409,8 +405,10 @@ if __name__ == "__main__":
         trainer.set_mask_dropout(C["model"]["mask_dropout_test"])
         predictions, targets,masks_txt,masks_au,masks_vi = trainer.predict(test_loader)
         
+        experiment_name = C["experiment"]["name"]
+        results_dir = C["results_dir"] + f"/{experiment_name}"
+        
         if C["model"]["enable_plot_embeddings"]:
-            
             model.plot_embeddings(torch.cat(targets), C["results_dir"])
            
 
@@ -437,8 +435,6 @@ if __name__ == "__main__":
 
         metrics = eval_mosei_senti(pred, y_test, True)
         print_metrics(metrics)
-        experiment_name = C["experiment"]["name"]
-        results_dir = C["results_dir"] + f"/{experiment_name}"
         safe_mkdirs(results_dir+"/numeric_results") #creates the directory for the results if it does not exist
         safe_mkdirs(results_dir+"/plot_images") #creates the directory for the plots if it does not exist
         safe_mkdirs(results_dir+"/plot_numbers")
@@ -520,7 +516,7 @@ if __name__ == "__main__":
                     
                     test_loader = create_dataloader(test_noise)
 
-                    predictions, targets, masks_txt ,masks_au ,masks_vi = trainer.predict(test_loader)
+                    predictions, targets, masks_txt, masks_au, masks_vi = trainer.predict(test_loader)
 
                     pred = torch.cat(predictions)
                     y_test = torch.cat(targets)
