@@ -144,6 +144,14 @@ def get_parser():
         type=str,
         help="Modality to be affected by the noise (all, text, audio, visual)",
     )
+    
+    parser.add_argument(
+        "--augment_train_data",
+        dest="model.augment_train_data",
+        action="store_true",
+        help="Determines whether to augment train data with noise",
+    )
+    
     return parser
 
 
