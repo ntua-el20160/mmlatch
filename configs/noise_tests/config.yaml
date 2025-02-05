@@ -25,11 +25,15 @@ model:
   mask_index_test: 1
   mask_dropout_train: 0.0
   mask_dropout_test: 0.0
-  noise_type: "none"
-  noise_percentage_train: 0.0
-  noise_percentage_test: 0.0
-  noise_modality: "all"
   enable_plot_embeddings: true
+
+noise:
+  train_noise_type: "none"
+  train_noise_percentage: 0.0
+  train_noise_modality: "all"
+  test_noise_type: "none"
+  test_noise_percentage: 0.0
+  test_noise_modality: "all"
 
 experiment:
   name: base-test
