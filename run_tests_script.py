@@ -38,7 +38,7 @@ def find_yaml_files(directory):
 
 def main():
     """Main function to process all YAML files."""
-    directories = ["mmlatch/configs/mask_tests", "mmlatch/configs/noise_tests"]
+    directories = ["mmlatch/configs/mask_tests", "mmlatch/configs/noise_tests", "mmlatch/configs/augment_tests"]
 
     for directory in directories:
         yaml_files = find_yaml_files(directory)
