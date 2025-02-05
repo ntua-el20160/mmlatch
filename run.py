@@ -20,6 +20,9 @@ from mmlatch.noise import add_noise
 import copy
 
 
+#global vairable
+
+
 class BCE(nn.Module):
     """Custom binary cross-entropy loss function"""
     def __init__(self):
@@ -396,7 +399,7 @@ if __name__ == "__main__":
         
         if C["model"]["enable_plot_embeddings"]:
             
-            model.plot_embeddings(torch.cat(targets), C["results_dir"])
+            model.plot_embeddings(torch.cat(targets), f'{C["results_dir"]}/{C["experiment"]["name"]}')
            
 
 
