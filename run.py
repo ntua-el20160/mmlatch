@@ -184,16 +184,12 @@ if __name__ == "__main__":
 
     # Add noise
     
-    # train = add_noise(train,
-    #                   noise_type=C['model']['noise_type'], 
-    #                   noise_modality=C['model']['noise_modality'], 
-    #                   noise_level=C['model']['noise_percentage_train']
-    #                   )
-    #train = append_noise(train,
-    #                  noise_type=C['model']['noise_type'], 
-    #                  noise_modality=C['model']['noise_modality'], 
-    #                  noise_level=C['model']['noise_percentage_train']
-    #                  )
+    train = add_noise(train,
+                      noise_type=C['model']['noise_type'], 
+                      noise_modality=C['model']['noise_modality'], 
+                      noise_level=C['model']['noise_percentage_train'],
+                      augment = C['model']['augment_train_data'],
+                      )
 
     #converts data to tensors
     to_tensor = ToTensor(device="cpu")
@@ -528,7 +524,8 @@ if __name__ == "__main__":
                     test_noise = add_noise(test,
                         noise_type=noise, 
                         noise_modality=modality, 
-                        noise_level=noise_levels[level][i]
+                        noise_level=noise_levels[level][i],
+                        augment = False
                     )
                     
                     test_loader = create_dataloader(test_noise)
@@ -598,4 +595,3 @@ if __name__ == "__main__":
 
 
                 
-
