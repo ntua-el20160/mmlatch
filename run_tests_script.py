@@ -21,6 +21,8 @@ def run_command(yaml_file):
         command = [os.path.abspath(arg) if os.path.exists(arg) else arg for arg in command]
 
         subprocess.run(command, check=True)  # Execute and check for errors
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        print(result.stdout)  # Print stdout
         print("--------------------")  # Separator
     except subprocess.CalledProcessError as e:
         print(f"Error running command for {yaml_file}: {e}")
