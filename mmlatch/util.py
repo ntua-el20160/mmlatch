@@ -173,6 +173,8 @@ def from_checkpoint(
 
     if isinstance(obj, torch.optim.Optimizer) and "optimizer" in state_dict:
         state_dict = state_dict["optimizer"]
+    if isinstance(obj, torch.optim.Optimizer) and "optimizer_encoder" in state_dict:
+        state_dict = state_dict["optimizer_encoder"]
     obj.load_state_dict(state_dict)  # type: ignore
 
     return obj

@@ -551,3 +551,27 @@ def eval_iemocap(results, truths, single=-1):
         results["{}_f1".format(emos[emo_ind])] = f1
 
     return results
+
+from torch.nn.functional import cosine_similarity
+
+def contrastive_loss_fn(embeddings, labels, temperature=0.07):
+    """
+    Implements supervised contrastive loss using cosine similarity.
+    Args:
+        embeddings (Tensor): Batch of embedding vectors.
+        labels (Tensor): Corresponding labels for each sample.
+        temperature (float): Temperature scaling for softmax.
+    Returns:
+        Tensor: Contrastive loss value.
+    """
+    batch_size = embeddings.shape[0]
+    embeddings = torch.nn.functional.normalize(embeddings, dim=1)
+
+    similarity_matrix = cosine_similarity(embeddings.unsqueeze(1), embeddings.unsqueeze(0), dim=2)  
+    labels_matrix = (labels.unsqueeze(1) == labels.unsqueeze(0)).float()
+
+    exp_sim = torch.exp(similarity_matrix / temperature)
+    contrastive_loss = -torch.log(exp_sim / exp_sim.sum(dim=1, keepdim=True)) * labels_matrix
+    contrastive_loss = contrastive_loss.sum() / labels_matrix.sum()
+
+    return contrastive_loss

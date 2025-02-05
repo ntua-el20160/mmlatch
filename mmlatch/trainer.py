@@ -14,6 +14,10 @@ from torch.utils.data import DataLoader
 from mmlatch.handlers import CheckpointHandler, EvaluationHandler
 from mmlatch.util import from_checkpoint, to_device, GenericDict
 
+from mmlatch.mosei_metrics.py import contrastive_loss_fn
+
+
+
 TrainerType = TypeVar("TrainerType", bound="Trainer")
 
 
@@ -22,13 +26,16 @@ class Trainer(object):
         self: TrainerType, # refers to instance of Trainer
         model: nn.Module, 
         optimizer: Optimizer,
+        optimizer_encoder: Optimizer,
         lr_scheduler=None, #learning rate scheduler
+        lr_scheduler_encoder=None,
         newbob_metric="loss", #metric for newbob scheduler
         checkpoint_dir: str = "../checkpoints",
         experiment_name: str = "experiment", #used for organizing experiments in /checkpoints
         score_fn: Optional[Callable] = None, #score to evaluate performance
         model_checkpoint: Optional[str] = None,
         optimizer_checkpoint: Optional[str] = None,
+        optimizer_encoder_checkpoint: Optional[str] = None,
         metrics: GenericDict = None, # a dictionary for additional metrics
         patience: int = 10, #epochs before early stopping
         validate_every: int = 1, #frequency of performing validation
@@ -54,6 +61,7 @@ class Trainer(object):
         #validates the checkpoint paths
         model_checkpoint = self._check_checkpoint(model_checkpoint)
         optimizer_checkpoint = self._check_checkpoint(optimizer_checkpoint)
+        optimizer_encoder_checkpoint = self._check_checkpoint(optimizer_encoder_checkpoint)
         #loads  model from checkpoint
         self.model = cast(
             nn.Module,
@@ -63,7 +71,9 @@ class Trainer(object):
         self.model = self.model.type(dtype).to(device)
         #load optimizer from checkpoint
         self.optimizer = from_checkpoint(optimizer_checkpoint, optimizer)
+        self.optimizer_encoder = from_checkpoint(optimizer_encoder_checkpoint, optimizer_encoder)
         self.lr_scheduler = lr_scheduler
+        self.lr_scheduler_encoder = lr_scheduler_encoder
 
         if metrics is None:
             metrics = {}
@@ -108,7 +118,7 @@ class Trainer(object):
         self.attach()
         print(
             f"Trainer configured to run {experiment_name}\n"
-            f"\tpretrained model: {model_checkpoint} {optimizer_checkpoint}\n"
+            f"\tpretrained model: {model_checkpoint} {optimizer_checkpoint} {optimizer_encoder_checkpoint}\n"
             f"\tcheckpoint directory: {checkpoint_dir}\n"
             f"\tpatience: {patience}\n"
             f"\taccumulation steps: {accumulation_steps}\n"
@@ -156,10 +166,10 @@ class Trainer(object):
         self: TrainerType, batch: List[torch.Tensor]
     ) -> Tuple[torch.Tensor, ...]:
         inputs, targets = self.parse_batch(batch) #extracts inputs and targets from the batch
-        y_pred,mask_txt,mask_au,mask_vi = self.model(inputs, self.enable_plot_embeddings) #predicts the output
+        y_pred,mask_txt,mask_au,mask_vi, emb_txt, emb_au, emb_vi = self.model(inputs, self.enable_plot_embeddings) #predicts the output
 
-        return y_pred, targets,mask_txt,mask_au,mask_vi #returns the predicted output and the target
-
+        return y_pred, targets,mask_txt,mask_au,mask_vi,emb_txt, emb_au, emb_vi #returns the predicted output and the target
+    """
     def train_step(
         self: TrainerType, engine: Engine, batch: List[torch.Tensor]
     ) -> float:
@@ -181,6 +191,49 @@ class Trainer(object):
         loss_value: float = loss.item()
 
         return loss_value #returns the loss value for the current batch
+    """
+
+    def train_step(
+        self: TrainerType, engine: Engine, batch: List[torch.Tensor]
+    ) -> float:
+        self.model.train()
+        y_pred, targets,_,_,_, emb_txt, emb_au, emb_vi = self.get_predictions_and_targets(batch)
+        loss = self.loss_fn(y_pred, targets)  # type: ignore
+
+        contrastive_txt_au = contrastive_loss_fn(emb_txt, emb_au)  # Text-Audio contrast
+        contrastive_txt_vi = contrastive_loss_fn(emb_txt, emb_vi)  # Text-Video contrast
+        contrastive_au_vi = contrastive_loss_fn(emb_au, emb_vi)  # Audio-Video contrast
+        contrastive_total = (contrastive_txt_au + contrastive_txt_vi + contrastive_au_vi) / 3
+
+        self.optimizer.zero_grad()
+        self.optimizer_encoder.zero_grad()
+
+        loss = loss / self.accumulation_steps #scales the loss by the accumulation steps
+        contrastive_total = contrastive_total / self.accumulation_steps
+
+
+
+        # Backpropagate main loss (retaining graph for contrastive loss)
+        loss.backward(retain_graph=True)
+
+        # Backpropagate contrastive loss only for encoder
+        contrastive_total.backward()
+
+        # Print LR every 128 iterations if a scheduler exists
+        if self.lr_scheduler is not None and (engine.state.iteration - 1) % 128 == 0:
+            print("LR = {}".format(self.optimizer.param_groups[0]["lr"]))
+
+        # Optimizer step after accumulating gradients
+        if (self.trainer.state.iteration + 1) % self.accumulation_steps == 0:
+            self.optimizer.step()  # Updates only fuser + classifier
+            self.optimizer_encoder.step()  # Updates only encoders
+            self.optimizer.zero_grad()
+            self.optimizer_encoder.zero_grad()
+
+        return loss.item()
+
+    
+
     
     #defines the evaluation step to be executed for each batch during evaluation.
     def eval_step(
@@ -188,7 +241,7 @@ class Trainer(object):
     ) -> Tuple[torch.Tensor, ...]:
         self.model.eval() #sets the model to evaluation mode
         with torch.no_grad():
-            y_pred, targets,_,_,_ = self.get_predictions_and_targets(batch)
+            y_pred, targets,_,_,_,_,_,_ = self.get_predictions_and_targets(batch)
 
             return y_pred, targets
 
@@ -199,7 +252,7 @@ class Trainer(object):
         for batch in dataloader:
             self.model.eval()
             with torch.no_grad():
-                pred, targ,mask_txt,mask_au,mask_vi = self.get_predictions_and_targets(batch)
+                pred, targ,mask_txt,mask_au,mask_vi,_,_,_ = self.get_predictions_and_targets(batch)
                 predictions.append(pred)
                 targets.append(targ)
                 masks_txt.append(mask_txt)
@@ -272,7 +325,7 @@ class Trainer(object):
         return out
     #Defines a private method to attach the checkpoint handler to the validation evaluator.
     def _attach_checkpoint(self: TrainerType) -> TrainerType:
-        ckpt = {"model": self.model, "optimizer": self.optimizer} #dictionary containing the model and optimizer
+        ckpt = {"model": self.model, "optimizer": self.optimizer, "optimizer_encoder": self.optimizer_encoder} #dictionary containing the model and optimizer
 
         if self.checkpoint_dir is not None:
             self.valid_evaluator.add_event_handler( #t after every completion of the validation evaluator, a checkpoint will be saved based on the current state.
@@ -322,8 +375,8 @@ class MOSEITrainer(Trainer):#inherits from the Trainer class and specialises 2 f
     ) -> Tuple[torch.Tensor, ...]:
         inputs, targets = self.parse_batch(batch)
         #y_pred = self.model(inputs)
-        y_pred,mask_txt,mask_au,mask_vi = self.model(inputs, self.enable_plot_embeddings)
+        y_pred,mask_txt,mask_au,mask_vi, emb_txt, emb_au, emb_vi = self.model(inputs, self.enable_plot_embeddings)
         y_pred = y_pred.squeeze()
         targets = targets.squeeze()
 
-        return y_pred, targets, mask_txt,mask_au,mask_vi
+        return y_pred, targets, mask_txt,mask_au,mask_vi, emb_txt, emb_au, emb_vi

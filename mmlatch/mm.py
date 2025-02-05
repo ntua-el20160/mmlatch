@@ -671,7 +671,7 @@ class AVTEncoder(nn.Module):
         
         fused = self._fuse(txt, au, vi, lengths)
 
-        return fused, mask_txt, mask_au, mask_vi
+        return fused, mask_txt, mask_au, mask_vi, txt, au, vi
 
     
     
