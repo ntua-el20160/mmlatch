@@ -1,9 +1,9 @@
-data_dir: /content/drive/MyDrive/CMU-MOSI
+data_dir: /content/drive/MyDrive/CMU-MOSEI
 dataloaders:
   batch_size: 32
   num_workers: 1
   pin_memory: false
-debug: false
+debug: true
 device: cuda
 experiment:
   description: MOSEI sentiment task
@@ -36,7 +36,7 @@ num_classes: 1
 optimizer:
   learning_rate: 0.0005
   name: Adam
-overfit_batch: false
+overfit_batch: true
 results_dir: /content/drive/MyDrive/our_results
 test: true
 train: true

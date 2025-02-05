@@ -1,4 +1,4 @@
-data_dir: /content/drive/MyDrive/CMU-MOSI
+data_dir: /content/drive/MyDrive/CMU-MOSEI
 dataloaders:
   batch_size: 32
   num_workers: 1
