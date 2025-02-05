@@ -1,6 +1,8 @@
 import numpy as np
 import copy
 
+np.random.seed(42)
+
 def add_gaussian_noise(features, sigma=0.01):
     """
     Adds gasussian noise to the feature vectors of a modality.
@@ -17,6 +19,42 @@ def add_dropout_noise(features, rate=0.5):
     mask = np.random.binomial(1, 1-rate, features.shape)
     return features * mask
 
+def pad_or_truncate(datum, goal_length):
+    """
+    Pads or truncates the input datum to match the goal_length.
+    
+    If the datum is shorter, it will be padded with zeros.
+    If it is longer, it will be truncated to match goal_length.
+
+    Args:
+        datum (numpy array): The input feature embedding.
+        goal_length (int): The desired length.
+
+    Returns:
+        numpy array: Padded or truncated array.
+    """
+    current_length = len(datum)
+    
+    if current_length < goal_length:
+        # Pad with zeros
+        padding = np.zeros((goal_length - current_length, datum.shape[1])) if datum.ndim == 2 else np.zeros(goal_length - current_length)
+        return np.concatenate((datum, padding), axis=0)
+    elif current_length > goal_length:
+        # Truncate to match the goal length
+        return datum[:goal_length]
+    return datum  # Return as-is if already the correct length
+
+def length_preserving_shuffler(datum1, datum2):
+    """
+    Ensures that datum2 matches the length of datum1 before replacement.
+    
+    datum1: current embedding (to be replaced)
+    datum2: replacing embedding
+    """
+    goal_length = len(datum1)
+    datum2_resized = pad_or_truncate(datum2, goal_length)
+    return datum2_resized  # Return the resized datum2
+
 def shuffle_modalities(dataset, modality_to_shuffle="all", shuffle_prob=0.1):
     """
     Shuffles modalities between samples to create out-of-context combinations.
@@ -28,8 +66,7 @@ def shuffle_modalities(dataset, modality_to_shuffle="all", shuffle_prob=0.1):
 
     Returns:
         list: Dataset with shuffled modalities.
-    """
-
+    """            
     # Determine which modalities to shuffle
     if modality_to_shuffle == "all":
         modalities = ["text", "audio", "visual"]
@@ -39,6 +76,9 @@ def shuffle_modalities(dataset, modality_to_shuffle="all", shuffle_prob=0.1):
     # Shuffle each modality
     for modality in modalities:
         # Collect all features for this modality across the dataset
+        print(f"Expected modality keys: {dataset[0].keys() if dataset else 'Empty Dataset'}") # DEBUGGING
+        print(f"Modality requested: {modality}") # DEBUGGING
+
         modality_features = [sample[modality] for sample in dataset]
 
         # Shuffle the features
@@ -47,27 +87,15 @@ def shuffle_modalities(dataset, modality_to_shuffle="all", shuffle_prob=0.1):
         # Apply shuffled features to samples based on shuffle_prob
         for i, sample in enumerate(dataset):
             if np.random.rand() < shuffle_prob:
-                original = sample[modality]
-                new_feat = modality_features[i]
-                orig_len = original.shape[0]
-                new_len = new_feat.shape[0]
+                sample[modality] = length_preserving_shuffler(sample[modality], modality_features[i])
 
-                # If new feature is shorter, pad it with zeros.
-                if new_len < orig_len:
-                    pad_width = ((0, orig_len - new_len),) + ((0, 0),) * (new_feat.ndim - 1)
-                    new_feat = np.pad(new_feat, pad_width, mode='constant')
-                # If new feature is longer, cut it to match the original length.
-                elif new_len > orig_len:
-                    new_feat = new_feat[:orig_len]
-
-                sample[modality] = new_feat
 
     return dataset
 
-def add_noise(dataset, noise_type='none', noise_modality='all', noise_level=0):
+def add_noise(dataset, noise_type='none', noise_modality='all', noise_level=0, augment=False):
     """
     Adds noise to the selected dataset (test/train)
-    noise_type = 'none', 'gaussian', 'dropout', 'shuffle'
+    noise_type = 'none', 'gaussian', 'dropout', 'shuffle', 'all'
     noise_modality = 'all', 'text', 'audio', 'visual' (note that 'text'=='glove')
     modifies dataset by reference
     """
@@ -102,11 +130,12 @@ def add_noise(dataset, noise_type='none', noise_modality='all', noise_level=0):
         for i in range(len(ds)):
             if noise_modality == 'all':
                 for modality in modalities:
-                    ds[i][modality] = add_gaussian_noise(ds[i][modality], noise_level_gaussian)
-                    ds[i][modality] = add_dropout_noise(ds[i][modality], noise_level_dropout)
+                    ds[i][modality] = add_dropout_noise(add_gaussian_noise(ds[i][modality], noise_level_gaussian), noise_level_dropout)
             else:
-                ds[i][noise_modality] = add_gaussian_noise(ds[i][noise_modality], noise_level_gaussian)
-                ds[i][noise_modality] = add_dropout_noise(ds[i][noise_modality], noise_level_dropout)
+                ds[i][noise_modality] = add_dropout_noise(add_gaussian_noise(ds[i][noise_modality], noise_level_gaussian), noise_level_dropout)
         ds = shuffle_modalities(ds, modality_to_shuffle=noise_modality, shuffle_prob=noise_level_shuffle)
 
-    return ds
+    if augment:
+        return dataset + ds
+    else:
+        return ds
