@@ -33,7 +33,7 @@
         enable_plot_embeddings: true
 
         experiment:
-        name: base-test
+        name: dropout_02
         description: MOSEI sentiment task
 
         dataloaders:

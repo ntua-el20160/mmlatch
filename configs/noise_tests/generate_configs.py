@@ -65,7 +65,7 @@ for train_mod in noise_modalities:
                 enable_plot_embeddings: true
 
                 experiment:
-                name: base-test
+                name: noise_{train_mod}_{train_type}_{train_level}
                 description: MOSEI sentiment task
 
                 dataloaders:

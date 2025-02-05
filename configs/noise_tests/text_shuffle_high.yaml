@@ -33,7 +33,7 @@
                 enable_plot_embeddings: true
 
                 experiment:
-                name: base-test
+                name: noise_text_shuffle_high
                 description: MOSEI sentiment task
 
                 dataloaders:

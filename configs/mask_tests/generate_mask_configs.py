@@ -44,7 +44,7 @@ for idx in mask_index:
         enable_plot_embeddings: true
 
         experiment:
-        name: base-test
+        name: mask_train-test-{idx}
         description: MOSEI sentiment task
 
         dataloaders:
