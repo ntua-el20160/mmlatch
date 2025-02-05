@@ -171,7 +171,7 @@ if __name__ == "__main__":
     print("Running with configuration")
     pprint(C)
     SUBSET_FRACTION = 1 #Defines the fraction of the dataset to be used
-    train, dev, test, vocab = mosi( #loads the mosi dataset
+    train, dev, test, vocab = mosei( #loads the mosi dataset
         C["data_dir"],
         modalities=["text", "glove", "audio", "visual"],
         remove_pauses=False,
