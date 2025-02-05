@@ -29,11 +29,12 @@ def shuffle_modalities(dataset, modality_to_shuffle="all", shuffle_prob=0.1):
     Returns:
         list: Dataset with shuffled modalities.
     """
+
     # Determine which modalities to shuffle
     if modality_to_shuffle == "all":
         modalities = ["text", "audio", "visual"]
     else:
-        modalities = modality_to_shuffle
+        modalities = [modality_to_shuffle]
 
     # Shuffle each modality
     for modality in modalities:
@@ -46,7 +47,20 @@ def shuffle_modalities(dataset, modality_to_shuffle="all", shuffle_prob=0.1):
         # Apply shuffled features to samples based on shuffle_prob
         for i, sample in enumerate(dataset):
             if np.random.rand() < shuffle_prob:
-                sample[modality] = modality_features[i]
+                original = sample[modality]
+                new_feat = modality_features[i]
+                orig_len = original.shape[0]
+                new_len = new_feat.shape[0]
+
+                # If new feature is shorter, pad it with zeros.
+                if new_len < orig_len:
+                    pad_width = ((0, orig_len - new_len),) + ((0, 0),) * (new_feat.ndim - 1)
+                    new_feat = np.pad(new_feat, pad_width, mode='constant')
+                # If new feature is longer, cut it to match the original length.
+                elif new_len > orig_len:
+                    new_feat = new_feat[:orig_len]
+
+                sample[modality] = new_feat
 
     return dataset
 
