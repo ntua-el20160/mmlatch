@@ -553,6 +553,7 @@ def eval_iemocap(results, truths, single=-1):
     return results
 
 from torch.nn.functional import cosine_similarity
+from mmlatch.util import  fix_nan_inf, truncate_embeddings, bin_predictions
 
 def contrastive_loss_fn(embeddings, labels, temperature=0.07):
     """
@@ -564,7 +565,10 @@ def contrastive_loss_fn(embeddings, labels, temperature=0.07):
     Returns:
         Tensor: Contrastive loss value.
     """
-    batch_size = embeddings.shape[0]
+
+    
+    #batch_size = embeddings.shape[0]
+
     embeddings = torch.nn.functional.normalize(embeddings, dim=1)
 
     similarity_matrix = cosine_similarity(embeddings.unsqueeze(1), embeddings.unsqueeze(0), dim=2)  

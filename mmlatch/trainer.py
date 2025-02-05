@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 from mmlatch.handlers import CheckpointHandler, EvaluationHandler
 from mmlatch.util import from_checkpoint, to_device, GenericDict
 
-from mmlatch.mosei_metrics.py import contrastive_loss_fn
+from mmlatch.mosei_metrics import contrastive_loss_fn
 
 
 
