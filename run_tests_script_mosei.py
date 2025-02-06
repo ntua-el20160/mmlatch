@@ -13,7 +13,7 @@ def run_command(yaml_file):
         print(f"Error: Config file {yaml_file} not found.")
         return  # Skip this file if it's not found
 
-    command = ["python", "mmlatch/run.py", "--config", yaml_file]
+    command = ["python", "mmlatch/run_mosei.py", "--config", yaml_file]
     print(f"Executing: {' '.join(command)}")  # Print the command
 
     try:
@@ -38,8 +38,9 @@ def find_yaml_files(directory):
 
 def main():
     """Main function to process all YAML files."""
-    directories = ["mmlatch/configs/mask_tests", "mmlatch/configs/noise_tests", "mmlatch/configs/augment_tests"]
-    
+    directories = ["mmlatch/configs/mask_tests", "mmlatch/configs/augment_tests","mmlatch/configs/noise_tests"]
+    run_command("mmatch/configs/config_MOSEI.yaml")
+
     for directory in directories:
         yaml_files = find_yaml_files(directory)
         for yaml_file in yaml_files:

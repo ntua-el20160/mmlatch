@@ -451,6 +451,8 @@ if __name__ == "__main__":
 
         comparison_filename = f"comparison_mask.pkl"
         comparison_filepath = os.path.join(C["results_dir"], comparison_filename)
+        if experiment_name == '':
+            save_comparison_data_pickle(comparison_filepath, pred, y_test, masks_txt, masks_au, masks_vi)
 
         data = {
     'predictions': pred.cpu().numpy(),      # Removed torch.cat

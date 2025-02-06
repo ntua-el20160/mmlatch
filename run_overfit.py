@@ -292,11 +292,11 @@ if __name__ == "__main__":
     criterion = nn.L1Loss()
 
     def bin_acc_transform(output):
-        y_pred, y = output
-        nz = torch.nonzero(y).squeeze()
-        yp, yt = (y_pred[nz] >= 0).long(), (y[nz] >= 0).long()
+      y_pred, y = output
+      nz = torch.nonzero(y).squeeze()
+      yp, yt = (y_pred[nz] >= 0).long(), (y[nz] >= 0).long()
+      return yp, yt
 
-        return yp, yt
 
     def acc_transform(output):
         y_pred, y = output
@@ -305,20 +305,22 @@ if __name__ == "__main__":
         return yp, yt
 
     def acc7_transform(output):
-        y_pred, y = output
-        yp = torch.clamp(torch.round(y_pred) + 3, 0, 6).view(-1).long()
-        yt = torch.round(y).view(-1).long() + 3
-        yp = F.one_hot(yp, 7)
+      y_pred, y = output
+      yp = torch.clamp(torch.round(y_pred) + 3, 0, 6).view(-1).long()
+      yt = torch.clamp(torch.round(y) + 3, 0, 6).view(-1).long()
+      yp = F.one_hot(yp, num_classes=7)
+      yt = F.one_hot(yt, num_classes=7)
+      return yp, yt
 
-        return yp, yt
 
     def acc5_transform(output):
-        y_pred, y = output
-        yp = torch.clamp(torch.round(y_pred) + 2, 0, 4).view(-1).long()
-        yt = torch.round(y).view(-1).long() + 2
-        yp = F.one_hot(yp, 5)
+      y_pred, y = output
+      yp = torch.clamp(torch.round(y_pred) + 2, 0, 4).view(-1).long()
+      yt = torch.clamp(torch.round(y) + 2, 0, 4).view(-1).long()
+      yp = F.one_hot(yp, num_classes=5)
+      yt = F.one_hot(yt, num_classes=5)
+      return yp, yt
 
-        return yp, yt
 
     metrics = {
         "acc5": Accuracy(output_transform=acc5_transform),

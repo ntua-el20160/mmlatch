@@ -1,4 +1,4 @@
-data_dir: /content/drive/MyDrive/CMU-MOSEI
+data_dir: /content/drive/MyDrive/CMU-MOSI
 dataloaders:
   batch_size: 32
   num_workers: 1
@@ -7,7 +7,7 @@ debug: false
 device: cuda
 experiment:
   description: MOSEI sentiment task
-  name: base-test-MOSEI
+  name: noise_mmlatch_test
 model:
   attention: true
   audio_input_size: 74
@@ -21,8 +21,8 @@ model:
   feedback_type: learnable_sequence_mask
   mask_dropout_test: 0.0
   mask_dropout_train: 0.0
-  mask_index_test: 1
-  mask_index_train: 1
+  mask_index_test: 6
+  mask_index_train: 6
   noise_modality: all
   noise_percentage_test: 0.0
   noise_percentage_train: 0.0
