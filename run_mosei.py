@@ -211,7 +211,7 @@ if __name__ == "__main__":
     to_tensor = ToTensor(device="cpu")
     to_tensor_float = ToTensor(device="cpu", dtype=torch.float)
 
-    def create_dataloader(data, shuffle=True):
+    def create_dataloader(data, shuffle=False):
         """Creates a DataLoader for the given data"""
         d = MOSEI(data, modalities=["text", "glove", "audio", "visual"], select_label=0)
         d.map(to_tensor_float, "visual", lazy=True) #maps the visual data to tensor
@@ -438,8 +438,8 @@ if __name__ == "__main__":
         save_histogram_data
         )
 
-        metrics = eval_mosei_senti(pred, y_test, True)
-        print_metrics(metrics)
+        eval_results = eval_mosei_senti(pred, y_test, True)
+        print_metrics(eval_results)
         safe_mkdirs(results_dir+"/numeric_results") #creates the directory for the results if it does not exist
         safe_mkdirs(results_dir+"/plot_images") #creates the directory for the plots if it does not exist
         safe_mkdirs(results_dir+"/plot_numbers")
@@ -447,11 +447,11 @@ if __name__ == "__main__":
         results_file = os.path.join(results_dir + f"/numeric_results", fname)
         fname2 = fname + "_masks"
         results_file2 = os.path.join(results_dir + f"/numeric_results", fname2)
-        save_metrics(metrics, results_file)
+        save_metrics(eval_results, results_file)
 
         comparison_filename = f"comparison_mask.pkl"
         comparison_filepath = os.path.join(C["results_dir"], comparison_filename)
-        if experiment_name == '':
+        if experiment_name == 'base-test-MOSEI':
             save_comparison_data_pickle(comparison_filepath, pred, y_test, masks_txt, masks_au, masks_vi)
 
         data = {
@@ -500,7 +500,8 @@ if __name__ == "__main__":
 
         save_histogram_data(predictions_distr_new, predictions_distr_comparison, targets_distr, results_dir, experiment_name)
         
-
+        all_eval_results = {"base": eval_results}
+        all_avg_metrics = {"base": avg_metrics}
         # Add noise to the test set and evaluate the model
         noise_types = [ "gaussian", "dropout", "shuffle",'all'] #all noise types
         noise_modalities = ["text", "audio", "visual","all"] #all modalities
@@ -535,7 +536,7 @@ if __name__ == "__main__":
                         'masks_vi': [mask.cpu().numpy() for mask in masks_vi],
                     }
 
-                    metrics = eval_mosei_senti(pred, y_test, True)
+                    eval_results = eval_mosei_senti(pred, y_test, True)
                     avg_metrics, _, _,_ = compare_masks(data, comparison_filepath)
 
                     print(f"Metrics on test set with {level} of {noise} noise at the {modality} modality")
@@ -549,7 +550,33 @@ if __name__ == "__main__":
                     fname2 = fname + "_masks"
                     results_file = os.path.join(results_dir + f"/numeric_results", fname2)
                     save_metrics(avg_metrics, results_file)
-
+                    all_eval_results[fname] = eval_results
+                    all_avg_metrics[fname] = avg_metrics
+        
+        import csv
+        # --- Save Eval Results to CSV ---
+        all_eval_csv = os.path.join(results_dir, "numeric_results", "all_eval_results.csv")
+        all_eval_keys = set()
+        for m in all_eval_results.values():
+            all_eval_keys.update(m.keys())
+        all_eval_keys = sorted(all_eval_keys)
+        with open(all_eval_csv, mode='w', newline='') as f:
+            writer = csv.writer(f)
+            # Write header: first column 'run', then all metric names.
+            writer.writerow(["run"] + list(all_eval_keys))
+            for run_name, m in all_eval_results.items():
+                writer.writerow([run_name] + [m.get(key, "") for key in all_eval_keys])
+        # --- Save Mask (Avg) Metrics to CSV ---
+        all_avg_csv = os.path.join(results_dir, "numeric_results", f"all_avg_metrics{experiment_name}.csv")
+        all_avg_keys = set()
+        for m in all_avg_metrics.values():
+            all_avg_keys.update(m.keys())
+        all_avg_keys = sorted(all_avg_keys)
+        with open(all_avg_csv, mode='w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(["run"] + list(all_avg_keys))
+            for run_name, m in all_avg_metrics.items():
+                writer.writerow([run_name] + [m.get(key, "") for key in all_avg_keys])
        
 
 
