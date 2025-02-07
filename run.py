@@ -17,12 +17,14 @@ from mmlatch.mm import AudioVisualTextClassifier, AVTClassifier
 from mmlatch.trainer import MOSEITrainer
 from mmlatch.util import safe_mkdirs
 from mmlatch.noise import add_noise
-import copy
 
-
-#global vairable
-
-
+# Fix generator seed for consistent DataLoader shuffling
+generator = torch.Generator()
+generator.manual_seed(42)  # Fixed seed
+torch.cuda.manual_seed(42)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+    
 class BCE(nn.Module):
     """Custom binary cross-entropy loss function"""
     def __init__(self):
@@ -137,6 +139,14 @@ def get_parser():
         help="Percentage of noise on test set",
     )
 
+    parser.add_argument(
+        "--augment_train_data",
+        dest="model.augment_train_data",
+        action="store_true",
+        help="Determines whether to augment train data with noise",
+    )
+
+ 
     parser.add_argument( 
         "--noise-modality",
         dest="model.noise_modality",
@@ -144,6 +154,8 @@ def get_parser():
         type=str,
         help="Modality to be affected by the noise (all, text, audio, visual)",
     )
+    
+    
     return parser
 
 
@@ -183,12 +195,12 @@ if __name__ == "__main__":
         d["text"] = d["glove"]
 
     # Add noise
-    
-    # train = add_noise(train,
-    #                   noise_type=C['model']['noise_type'], 
-    #                   noise_modality=C['model']['noise_modality'], 
-    #                   noise_level=C['model']['noise_percentage_train']
-    #                   )
+    train = add_noise(train,
+                        noise_type=C['model']['noise_type'], 
+                        noise_modality=C['model']['noise_modality'], 
+                        noise_level=C['model']['noise_percentage_train'],
+                        augment = C['model']['augment_train_data'],
+                        )
     #train = append_noise(train,
     #                  noise_type=C['model']['noise_type'], 
     #                  noise_modality=C['model']['noise_modality'], 
@@ -198,11 +210,10 @@ if __name__ == "__main__":
     #converts data to tensors
     to_tensor = ToTensor(device="cpu")
     to_tensor_float = ToTensor(device="cpu", dtype=torch.float)
-    test1 = copy.deepcopy(test)
-    def create_dataloader(data, shuffle=False):
+
+    def create_dataloader(data, shuffle=True):
         """Creates a DataLoader for the given data"""
-        ds = copy.deepcopy(data)
-        d = MOSEI(ds, modalities=["text", "glove", "audio", "visual"], select_label=0)
+        d = MOSEI(data, modalities=["text", "glove", "audio", "visual"], select_label=0)
         d.map(to_tensor_float, "visual", lazy=True) #maps the visual data to tensor
         d.map(to_tensor_float, "text", lazy=True) #maps the text data to tensor
         d = d.map(to_tensor_float, "audio", lazy=True) #maps the audio data to tensor
@@ -214,9 +225,11 @@ if __name__ == "__main__":
             pin_memory=C["dataloaders"]["pin_memory"],
             shuffle=shuffle,
             collate_fn=collate_fn,
+            generator=generator,
         )
 
         return dataloader
+
     train_loader = create_dataloader(train)
     dev_loader = create_dataloader(dev)
     test_loader = create_dataloader(test)
@@ -421,9 +434,11 @@ if __name__ == "__main__":
         trainer.set_mask_dropout(C["model"]["mask_dropout_test"])
         predictions, targets,masks_txt,masks_au,masks_vi = trainer.predict(test_loader)
         
+        experiment_name = C["experiment"]["name"]
+        results_dir = C["results_dir"] + f"/{experiment_name}"
+        
         if C["model"]["enable_plot_embeddings"]:
-            
-            model.plot_embeddings(torch.cat(targets), f'{C["results_dir"]}/{C["experiment"]["name"]}')
+            model.plot_embeddings(torch.cat(targets), results_dir)
            
 
 
@@ -434,7 +449,7 @@ if __name__ == "__main__":
         pred = torch.cat(predictions)
         y_test = torch.cat(targets)
  
-        # import uuid
+        import uuid
 
         from mmlatch.mosei_metrics import (
         eval_mosei_senti,
@@ -447,10 +462,8 @@ if __name__ == "__main__":
         save_histogram_data
         )
 
-        eval_results = eval_mosei_senti(pred, y_test, True)
-        print_metrics(eval_results)
-        experiment_name = C["experiment"]["name"]
-        results_dir = C["results_dir"] + f"/{experiment_name}"
+        metrics = eval_mosei_senti(pred, y_test, True)
+        print_metrics(metrics)
         safe_mkdirs(results_dir+"/numeric_results") #creates the directory for the results if it does not exist
         safe_mkdirs(results_dir+"/plot_images") #creates the directory for the plots if it does not exist
         safe_mkdirs(results_dir+"/plot_numbers")
@@ -458,11 +471,10 @@ if __name__ == "__main__":
         results_file = os.path.join(results_dir + f"/numeric_results", fname)
         fname2 = fname + "_masks"
         results_file2 = os.path.join(results_dir + f"/numeric_results", fname2)
-        save_metrics(eval_results, results_file)
+        save_metrics(metrics, results_file)
 
         comparison_filename = f"comparison_mask.pkl"
         comparison_filepath = os.path.join(C["results_dir"], comparison_filename)
-        save_comparison_data_pickle(comparison_filepath, pred, y_test, masks_txt, masks_au, masks_vi)
 
         data = {
     'predictions': pred.cpu().numpy(),      # Removed torch.cat
@@ -470,7 +482,7 @@ if __name__ == "__main__":
     'masks_txt': [mask.cpu().numpy() for mask in masks_txt],
     'masks_au': [mask.cpu().numpy() for mask in masks_au],
     'masks_vi': [mask.cpu().numpy() for mask in masks_vi],
-    }
+}
 
         avg_metrics, mean_mask_mod_target, diff_mask_mod_target,mean_mask_new_pred = compare_masks(data, comparison_filepath)
 
@@ -479,8 +491,6 @@ if __name__ == "__main__":
 
         # Save the metrics
         save_metrics(avg_metrics, results_file2)
-        all_eval_results = {"base": eval_results}
-        all_avg_metrics = {"base": avg_metrics}
 
         # Retrieve experiment name for labeling
         
@@ -517,39 +527,16 @@ if __name__ == "__main__":
         noise_types = [ "gaussian", "dropout", "shuffle",'all'] #all noise types
         noise_modalities = ["text", "audio", "visual","all"] #all modalities
         noise_levels = {}
-        noise_levels['low'] = [0.01, 0.15, 0.15, [0.01, 0.15, 0.15]]  # Fourth element is a list
-        noise_levels['high'] = [0.1, 0.4, 0.4, [0.1, 0.4, 0.4]]
+        noise_levels['high'] = [0.01, 0.15, 0.15, [0.01, 0.15, 0.15]]  # Fourth element is a list
+        noise_levels['low'] = [0.1, 0.4, 0.4, [0.1, 0.4, 0.4]]
 
         for modality in noise_modalities:
             for level in ['high', 'low']:
                 for i,noise in enumerate(noise_types):
-                    
                     # if we train with noise, we only want to test with the same noise and all types of noises
                     if(C['model']['noise_type'] != 'none' and C['model']['noise_type'] != noise and noise != 'all'):
                         continue
-                    test = copy.deepcopy(test1)
-                    try:
-                        del trainer
-                    except:
-                        pass
-
-                    trainer = MOSEITrainer(
-                        model=model,
-                        optimizer=optimizer,
-                        optimizer_encoder=optimizer_encoder,
-                        experiment_name=C["experiment"]["name"],
-                        checkpoint_dir=C["trainer"]["checkpoint_dir"],
-                        metrics=metrics,
-                        model_checkpoint=C["trainer"]["load_model"],
-                        non_blocking=C["trainer"]["non_blocking"],
-                        patience=C["trainer"]["patience"],
-                        validate_every=C["trainer"]["validate_every"],
-                        retain_graph=C["trainer"]["retain_graph"],
-                        loss_fn=criterion,
-                        device=C["device"],
-                        enable_plot_embeddings=C["model"]["enable_plot_embeddings"]
-                        
-                    )
+  
                     test_noise = add_noise(test,
                         noise_type=noise, 
                         noise_modality=modality, 
@@ -558,7 +545,7 @@ if __name__ == "__main__":
                     
                     test_loader = create_dataloader(test_noise)
 
-                    predictions, targets,masks_txt,masks_au,masks_vi = trainer.predict(test_loader)
+                    predictions, targets, masks_txt, masks_au, masks_vi = trainer.predict(test_loader)
 
                     pred = torch.cat(predictions)
                     y_test = torch.cat(targets)
@@ -570,55 +557,22 @@ if __name__ == "__main__":
                         'masks_vi': [mask.cpu().numpy() for mask in masks_vi],
                     }
 
-                    eval_results = eval_mosei_senti(pred, y_test, True)
-
-
+                    metrics = eval_mosei_senti(pred, y_test, True)
                     avg_metrics, _, _,_ = compare_masks(data, comparison_filepath)
 
                     print(f"Metrics on test set with {level} of {noise} noise at the {modality} modality")
-                    print_metrics(eval_results)
+                    print_metrics(metrics)
                     print_metrics(avg_metrics)
 
                     fname = f'results_{modality}_{noise}_{level}'
                     results_file = os.path.join(results_dir + f"/numeric_results", fname)
-                    save_metrics(eval_results, results_file)
+                    save_metrics(metrics, results_file)
 
                     fname2 = fname + "_masks"
                     results_file = os.path.join(results_dir + f"/numeric_results", fname2)
                     save_metrics(avg_metrics, results_file)
-                    all_eval_results[fname] = eval_results
-                    all_avg_metrics[fname] = avg_metrics
-        import csv
 
-        # --- Save Eval Results to CSV ---
-        all_eval_csv = os.path.join(results_dir, "numeric_results", "all_eval_results.csv")
-        all_eval_keys = set()
-        for m in all_eval_results.values():
-            all_eval_keys.update(m.keys())
-        all_eval_keys = sorted(all_eval_keys)
-
-        with open(all_eval_csv, mode='w', newline='') as f:
-            writer = csv.writer(f)
-            # Write header: first column 'run', then all metric names.
-            writer.writerow(["run"] + list(all_eval_keys))
-            for run_name, m in all_eval_results.items():
-                writer.writerow([run_name] + [m.get(key, "") for key in all_eval_keys])
-
-        # --- Save Mask (Avg) Metrics to CSV ---
-        all_avg_csv = os.path.join(results_dir, "numeric_results", f"all_avg_metrics{experiment_name}.csv")
-        all_avg_keys = set()
-        for m in all_avg_metrics.values():
-            all_avg_keys.update(m.keys())
-        all_avg_keys = sorted(all_avg_keys)
-
-        with open(all_avg_csv, mode='w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(["run"] + list(all_avg_keys))
-            for run_name, m in all_avg_metrics.items():
-                writer.writerow([run_name] + [m.get(key, "") for key in all_avg_keys])
-
-
-            
+       
 
 
 

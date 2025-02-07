@@ -145,6 +145,13 @@ def get_parser():
         type=str,
         help="Modality to be affected by the noise (all, text, audio, visual)",
     )
+    
+    parser.add_argument(
+        "--augment_train_data",
+        dest="model.augment_train_data",
+        action="store_true",
+        help="Determines whether to augment train data with noise",
+    )
     return parser
 
 
@@ -187,12 +194,14 @@ if __name__ == "__main__":
     train = add_noise(train,
                       noise_type=C['model']['noise_type'], 
                       noise_modality=C['model']['noise_modality'], 
-                      noise_level=C['model']['noise_percentage_train']
+                      noise_level=C['model']['noise_percentage_train'],
+                      augment = C['model']['augment_train_data'],
                       )
     test = add_noise(test, 
                     noise_type=C['model']['noise_type'], 
                     noise_modality=C['model']['noise_modality'], 
-                    noise_level=C['model']['noise_percentage_test']
+                    noise_level=C['model']['noise_percentage_test'],
+                    augment = C['model']['augment_train_data'],
                     )
 
     #converts data to tensors
