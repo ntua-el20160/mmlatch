@@ -290,41 +290,20 @@ if __name__ == "__main__":
 
     print("NUMBER OF PARAMETERS: {}".format(count_parameters(model)))
 
-    # Move model to device
     model = model.to(C["device"])
-
-    # Optimizer for Fuser + Classifier (only main loss)
     optimizer = getattr(torch.optim, C["optimizer"]["name"])(
-        [p for n, p in model.named_parameters() if ("fuser" in n or "classifier" in n) and p.requires_grad],
+        [p for p in model.parameters() if p.requires_grad],
         lr=C["optimizer"]["learning_rate"],
     )
 
-    # LR scheduler for optimizer
     lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
-        mode="min",  # Added missing argument
+        "min",
         factor=0.5,
         patience=2,
         cooldown=2,
         min_lr=C["optimizer"]["learning_rate"] / 20.0,
     )
-
-    # Optimizer for Unimodal Encoders (text, audio, visual)
-    optimizer_encoder = getattr(torch.optim, C["optimizer"]["name"])(
-        [p for n, p in model.named_parameters() if ("text" in n or "audio" in n or "visual" in n) and p.requires_grad],
-        lr=C["optimizer"]["learning_rate"],
-    )
-
-    # LR scheduler for optimizer_encoder
-    lr_scheduler_encoder = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer_encoder,
-        mode="min",
-        factor=0.5,
-        patience=2,
-        cooldown=2,
-        min_lr=C["optimizer"]["learning_rate"] / 20.0,
-    )
-
 
     criterion = nn.L1Loss()
 
@@ -380,7 +359,6 @@ if __name__ == "__main__":
         trainer = MOSEITrainer(
             model,
             optimizer,
-            optimizer_encoder,
             # score_fn=score_fn,
             experiment_name=C["experiment"]["name"],
             checkpoint_dir=C["trainer"]["checkpoint_dir"],
@@ -392,7 +370,6 @@ if __name__ == "__main__":
             loss_fn=criterion,
             accumulation_steps=acc_steps,
             lr_scheduler=lr_scheduler,
-            lr_scheduler_encoder=lr_scheduler_encoder,
             device=C["device"],
             enable_plot_embeddings=False # we enable this flag only at test trainer (if it is true  in the config file)
         )
@@ -415,7 +392,6 @@ if __name__ == "__main__":
         trainer = MOSEITrainer(
             model,
             optimizer,
-            optimizer_encoder=optimizer_encoder,
             experiment_name=C["experiment"]["name"],
             checkpoint_dir=C["trainer"]["checkpoint_dir"],
             metrics=metrics,
@@ -577,4 +553,3 @@ if __name__ == "__main__":
 
 
                 
-

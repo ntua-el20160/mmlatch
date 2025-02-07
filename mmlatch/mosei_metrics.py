@@ -552,30 +552,39 @@ def eval_iemocap(results, truths, single=-1):
 
     return results
 
-from torch.nn.functional import cosine_similarity
-from mmlatch.util import  fix_nan_inf, truncate_embeddings, bin_predictions
+import torch.nn.functional as F
 
-def contrastive_loss_fn(embeddings, labels, temperature=0.07):
+def contrastive_loss_fn(embeddings1, embeddings2, temperature=0.07):
     """
-    Implements supervised contrastive loss using cosine similarity.
-    Args:
-        embeddings (Tensor): Batch of embedding vectors.
-        labels (Tensor): Corresponding labels for each sample.
-        temperature (float): Temperature scaling for softmax.
-    Returns:
-        Tensor: Contrastive loss value.
-    """
-
+    Computes contrastive loss between two different modality embeddings.
     
-    #batch_size = embeddings.shape[0]
+    Args:
+        embeddings1 (Tensor): First set of embeddings (batch_size, emb_dim).
+        embeddings2 (Tensor): Second set of embeddings (batch_size, emb_dim).
+        temperature (float): Temperature scaling for softmax.
+    
+    Returns:
+        Tensor: Contrastive loss value (scalar).
+    """
+    # Normalize embeddings
+    embeddings1 = F.normalize(embeddings1, dim=1)
+    embeddings2 = F.normalize(embeddings2, dim=1)
 
-    embeddings = torch.nn.functional.normalize(embeddings, dim=1)
+    # Compute cosine similarity
+    similarity_matrix = F.cosine_similarity(embeddings1.unsqueeze(1), embeddings2.unsqueeze(0), dim=2)  # (batch, batch)
 
-    similarity_matrix = cosine_similarity(embeddings.unsqueeze(1), embeddings.unsqueeze(0), dim=2)  
+    # Create label similarity matrix (same index = same class)
+    batch_size = embeddings1.shape[0]
+    labels = torch.arange(batch_size, device=embeddings1.device)  # Assign unique labels per sample
     labels_matrix = (labels.unsqueeze(1) == labels.unsqueeze(0)).float()
 
-    exp_sim = torch.exp(similarity_matrix / temperature)
-    contrastive_loss = -torch.log(exp_sim / exp_sim.sum(dim=1, keepdim=True)) * labels_matrix
-    contrastive_loss = contrastive_loss.sum() / labels_matrix.sum()
+    # Compute log softmax for numerical stability
+    log_probs = F.log_softmax(similarity_matrix / temperature, dim=1)
+
+    # Compute contrastive loss
+    contrastive_loss = -log_probs * labels_matrix
+    contrastive_loss = contrastive_loss.sum() / (labels_matrix.sum() + 1e-8)  # Avoid division by zero
 
     return contrastive_loss
+
+

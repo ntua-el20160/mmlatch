@@ -797,11 +797,11 @@ class AVTClassifier(nn.Module):
         """Updates mask_dropout for all Feedback ."""
         self.encoder.set_mask_dropout(new_mask_dropout)
     def forward(self, inputs, enable_plot_embeddings):
-        out,mask_txt,mask_au,mask_vi = self.encoder(
+        out,mask_txt,mask_au,mask_vi, txt, au, vi = self.encoder(
             inputs["text"], inputs["audio"], inputs["visual"], inputs["lengths"], enable_plot_embeddings
         )
 
-        return self.classifier(out),mask_txt,mask_au,mask_vi
+        return self.classifier(out),mask_txt,mask_au,mask_vi, txt, au, vi
     
     def plot_embeddings(self, targets=None, results_dir=None):
         self.encoder.plot_embeddings(targets, results_dir)
