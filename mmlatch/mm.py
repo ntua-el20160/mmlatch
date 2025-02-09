@@ -694,7 +694,8 @@ class AVTEncoder(nn.Module):
         # Round targets to nearest integer
         if torch.is_tensor(targets):
             targets = targets.cpu().numpy()
-        targets = np.round(targets).astype(int)
+        
+        targets = np.clip(np.round(targets).astype(int), -3, 3)
 
         for i, modality in enumerate(modalities):
             before_list = getattr(self, f"all_{modality}_embeddings_before")
