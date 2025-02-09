@@ -167,7 +167,8 @@ collate_fn = MOSEICollator( #Defines the collator for the DataLoader
 
 
 if __name__ == "__main__":
-    results_dir = C["results_dir"] + f"/{C["experiment"]["name"]}"
+    experiment_name = C["experiment"]["name"]
+    results_dir = C["results_dir"] + f"/{experiment_name}"
     if os.path.exists(results_dir):
         print(f"Directory {results_dir} already exists. Exiting...")
         sys.exit(1)  # Exits the script with a non-zero status code
