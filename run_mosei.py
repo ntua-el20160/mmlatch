@@ -415,7 +415,7 @@ if __name__ == "__main__":
         #UPDATE MASK INDEX HERE IF NEEDED
         trainer.set_mask_index(C["model"]["mask_index_test"])
         trainer.set_mask_dropout(C["model"]["mask_dropout_test"])
-        predictions, targets,masks_txt,masks_au,masks_vi, contrastive_loss = trainer.predict(test_loader)
+        predictions, targets,masks_txt,masks_au,masks_vi = trainer.predict(test_loader)
         
         experiment_name = C["experiment"]["name"]
         results_dir = C["results_dir"] + f"/{experiment_name}"

@@ -374,41 +374,30 @@ def fix_nan_inf(embeddings):
         
         return fixed_embeddings
 
+import torch
+import torch.nn.functional as F
 
 def contrastive_loss_fn(embeddings1, embeddings2, embeddings3, temperature=0.07):
     """
     Computes Self-decoupled Modality-Shared Contrastive (SMC) loss for three modality embeddings.
-    
-    Args:
-        embeddings1 (Tensor): First set of embeddings (batch_size, emb_dim).
-        embeddings2 (Tensor): Second set of embeddings (batch_size, emb_dim).
-        embeddings3 (Tensor): Third set of embeddings (batch_size, emb_dim).
-        temperature (float): Temperature scaling for softmax.
-    
-    Returns:
-        Tensor: SMC contrastive loss value (scalar).
     """
     # Normalize embeddings
-    #embeddings1 = F.normalize(embeddings1, dim=1)
-    #embeddings2 = F.normalize(embeddings2, dim=1)
-    #embeddings3 = F.normalize(embeddings3, dim=1)
-    
-    # Stack embeddings for easier computation
-    all_embeddings = torch.stack([embeddings1, embeddings2, embeddings3])  # Shape (3, batch_size, emb_dim)
+    embeddings1 = F.normalize(embeddings1, dim=1)
+    embeddings2 = F.normalize(embeddings2, dim=1)
+    embeddings3 = F.normalize(embeddings3, dim=1)
+
+    # Concatenate embeddings along batch dimension
+    all_embeddings = torch.cat([embeddings1, embeddings2, embeddings3], dim=0)  # Shape (3*batch_size, emb_dim)
     batch_size = embeddings1.shape[0]
-    
-    # Compute cosine similarity between all pairs of embeddings
-    similarity_matrix = torch.einsum('mbd,nbd->mn', all_embeddings, all_embeddings) / temperature
-    
-    # Create label similarity matrix (same sample across modalities = positive, others = negative)
+
+    # Compute cosine similarity
+    similarity_matrix = torch.matmul(all_embeddings, all_embeddings.T) / temperature  # Shape (3*batch_size, 3*batch_size)
+
+    # Create labels for positive samples
     labels = torch.arange(batch_size, device=embeddings1.device)
-    labels_matrix = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()  # Shape (batch, batch)
-    
-    # Compute log softmax for numerical stability
-    log_probs = F.log_softmax(similarity_matrix, dim=1)
-    
-    # Decouple self-contrast by ignoring diagonal elements (self-comparisons)
-    contrastive_loss = -log_probs * labels_matrix
-    contrastive_loss = contrastive_loss.sum() / (labels_matrix.sum() + 1e-8)  # Avoid division by zero
-    
+    labels = labels.repeat(3)  # Expand to match all modalities
+
+    # Compute loss using cross-entropy
+    contrastive_loss = F.cross_entropy(similarity_matrix, labels)
+
     return contrastive_loss
