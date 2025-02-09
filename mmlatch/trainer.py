@@ -12,10 +12,13 @@ from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
 
 from mmlatch.handlers import CheckpointHandler, EvaluationHandler
-from mmlatch.util import from_checkpoint, to_device, GenericDict
-from mmlatch.mosei_metrics import contrastive_loss_fn
+from mmlatch.util import from_checkpoint, to_device, GenericDict, contrastive_loss_fn
 
 TrainerType = TypeVar("TrainerType", bound="Trainer")
+
+
+
+
 
 
 class Trainer(object):
@@ -40,6 +43,7 @@ class Trainer(object):
         dtype: torch.dtype = torch.float,
         device: str = "cpu",
         enable_plot_embeddings: bool = False,  # New plot_embeddings mode flag
+        lambda_contrastive = 0.1,
     ) -> None:
         self.dtype = dtype
         self.retain_graph = retain_graph
@@ -51,7 +55,8 @@ class Trainer(object):
         self.accumulation_steps = accumulation_steps
         self.checkpoint_dir = checkpoint_dir
         self.enable_plot_embeddings = enable_plot_embeddings  # Store plot_embeddings mode flag
-        
+        self.lambda_contrastive = lambda_contrastive
+
         #validates the checkpoint paths
         model_checkpoint = self._check_checkpoint(model_checkpoint)
         optimizer_checkpoint = self._check_checkpoint(optimizer_checkpoint)
@@ -69,8 +74,15 @@ class Trainer(object):
         if metrics is None:
             metrics = {}
         #Ensures that loss is always calculated
+
+        def total_loss_output_transform(output):
+
+            # Unpack values returned by eval_step
+            loss, _, _, _, _, _ = output
+            return loss
+        
         if "loss" not in metrics:
-            metrics["loss"] = Loss(self.loss_fn)
+            metrics["loss"] = Loss(total_loss_output_transform)
         #initialize the trainer, train evaluator and validation evaluator
         self.trainer = Engine(self.train_step)
         self.train_evaluator = Engine(self.eval_step)
@@ -162,20 +174,13 @@ class Trainer(object):
         return y_pred, targets,mask_txt,mask_au,mask_vi,emb_txt, emb_au, emb_vi #returns the predicted output and the target
 
     def train_step(
-    self: TrainerType, engine: Engine, batch: List[torch.Tensor]
+    self: TrainerType, engine: Engine, batch: List[torch.Tensor], lambda_contrastive = 0.1
     ) -> float:
         self.model.train()
         
         # Get predictions and multimodal embeddings
         y_pred, targets, _, _, _, emb_txt, emb_au, emb_vi = self.get_predictions_and_targets(batch)
         
-        # === Round and Clip Predictions & Targets ===
-        valid_values = torch.tensor([-3, -2, -1, 0, 1, 2, 3], device=y_pred.device)
-        y_pred = torch.round(y_pred)  # Round to nearest integer
-        y_pred = torch.clamp(y_pred, min=-3, max=3)  # Clip to valid range
-        targets = torch.round(targets)
-        targets = torch.clamp(targets, min=-3, max=3)
-
         # === Compute MAE Loss ===
         mae_loss = self.loss_fn(y_pred, targets)  # type: ignore
         
@@ -187,17 +192,10 @@ class Trainer(object):
         if emb_vi.dim() == 3:
             emb_vi = emb_vi.mean(dim=1)
         
-        # === Contrastive Loss for Different Modalities ===
-        contrastive_txt_au = contrastive_loss_fn(emb_txt, emb_au)  # Text-Audio contrast
-        contrastive_txt_vi = contrastive_loss_fn(emb_txt, emb_vi)  # Text-Video contrast
-        contrastive_au_vi = contrastive_loss_fn(emb_au, emb_vi)  # Audio-Video contrast
-
-        contrastive_total = (contrastive_txt_au + contrastive_txt_vi + contrastive_au_vi) / 3
-
+        contrastive_loss = contrastive_loss_fn(emb_txt, emb_au, emb_vi)
+    
         # === Loss Scaling ===
-        lambda_mae = 1.0
-        lambda_contrastive = 0.1  # Adjust as needed
-        loss = lambda_mae * mae_loss + lambda_contrastive * contrastive_total
+        loss = mae_loss + lambda_contrastive * contrastive_loss
 
         # === Gradient Accumulation ===
         loss = loss / self.accumulation_steps
@@ -222,27 +220,31 @@ class Trainer(object):
     def eval_step(
         self: TrainerType, engine: Engine, batch: List[torch.Tensor]
     ) -> Tuple[torch.Tensor, ...]:
-        self.model.eval() #sets the model to evaluation mode
+        self.model.eval()
         with torch.no_grad():
-            y_pred, targets,_,_,_ = self.get_predictions_and_targets(batch)
+            # Get predictions and multimodal embeddings
+            y_pred, targets, _, _, _, emb_txt, emb_au, emb_vi = self.get_predictions_and_targets(batch)
 
-            return y_pred, targets
+            # === Compute MAE Loss ===
+            mae_loss = self.loss_fn(y_pred, targets)  # type: ignore
 
-    #predict method is used to predict the output of the model on the given dataloader
-    def predict(self: TrainerType, dataloader: DataLoader) -> State:
-        predictions, targets,masks_txt,masks_au,masks_vi = [],[],[],[],[]
+            # === Mean Pooling for Contrastive Loss ===
+            if emb_txt.dim() == 3:
+                emb_txt = emb_txt.mean(dim=1)  # Shape: (batch, emb_dim)
+            if emb_au.dim() == 3:
+                emb_au = emb_au.mean(dim=1)
+            if emb_vi.dim() == 3:
+                emb_vi = emb_vi.mean(dim=1)
 
-        for batch in dataloader:
-            self.model.eval()
-            with torch.no_grad():
-                pred, targ,mask_txt,mask_au,mask_vi = self.get_predictions_and_targets(batch)
-                predictions.append(pred)
-                targets.append(targ)
-                masks_txt.append(mask_txt)
-                masks_au.append(mask_au)
-                masks_vi.append(mask_vi)
+            # === Compute Contrastive Loss ===
+            contrastive_loss = contrastive_loss_fn(emb_txt, emb_au, emb_vi)
+            
+            # === Total Evaluation Loss ===
+            loss = mae_loss + self.lambda_contrastive * contrastive_loss
 
-        return predictions, targets,masks_txt,masks_au,masks_vi
+            return loss, y_pred, targets, emb_txt, emb_au, emb_vi
+
+    
     def set_mask_index(self, new_mask_index):
         """
         Updates the mask_index for all FeedbackUnit instances.

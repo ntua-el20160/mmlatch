@@ -431,7 +431,7 @@ def weighted_accuracy(test_preds_emo, test_truth_emo):
     return (tp * (n / p) + tn) / (2 * n)
 
 
-def eval_mosei_senti(results, truths, exclude_zero=False):
+def eval_mosei_senti(results, truths,exclude_zero=False):
     test_preds = results.view(-1).cpu().detach().numpy()
     test_truth = truths.view(-1).cpu().detach().numpy()
 
@@ -552,39 +552,7 @@ def eval_iemocap(results, truths, single=-1):
 
     return results
 
-import torch.nn.functional as F
 
-def contrastive_loss_fn(embeddings1, embeddings2, temperature=0.07):
-    """
-    Computes contrastive loss between two different modality embeddings.
-    
-    Args:
-        embeddings1 (Tensor): First set of embeddings (batch_size, emb_dim).
-        embeddings2 (Tensor): Second set of embeddings (batch_size, emb_dim).
-        temperature (float): Temperature scaling for softmax.
-    
-    Returns:
-        Tensor: Contrastive loss value (scalar).
-    """
-    # Normalize embeddings
-    embeddings1 = F.normalize(embeddings1, dim=1)
-    embeddings2 = F.normalize(embeddings2, dim=1)
 
-    # Compute cosine similarity
-    similarity_matrix = F.cosine_similarity(embeddings1.unsqueeze(1), embeddings2.unsqueeze(0), dim=2)  # (batch, batch)
-
-    # Create label similarity matrix (same index = same class)
-    batch_size = embeddings1.shape[0]
-    labels = torch.arange(batch_size, device=embeddings1.device)  # Assign unique labels per sample
-    labels_matrix = (labels.unsqueeze(1) == labels.unsqueeze(0)).float()
-
-    # Compute log softmax for numerical stability
-    log_probs = F.log_softmax(similarity_matrix / temperature, dim=1)
-
-    # Compute contrastive loss
-    contrastive_loss = -log_probs * labels_matrix
-    contrastive_loss = contrastive_loss.sum() / (labels_matrix.sum() + 1e-8)  # Avoid division by zero
-
-    return contrastive_loss
 
 

@@ -19,6 +19,8 @@ import matplotlib.pyplot as plt
 import umap
 import seaborn as sns
 import re
+import torch.nn.functional as F
+
 
 
 from sklearn.metrics import silhouette_score, davies_bouldin_score
@@ -281,6 +283,9 @@ def plot_umap(embeddings, predictions, title_before, title_after, ax1, ax2, save
     if save_path:
         plt.savefig(save_path, bbox_inches="tight", dpi=300)
         print(f"Figure saved to {save_path}")
+
+from sklearn.preprocessing import StandardScaler
+
 def compute_metrics_embeddings(embeddings, labels):
 
         if torch.is_tensor(embeddings):
@@ -316,6 +321,10 @@ def compute_metrics_embeddings(embeddings, labels):
 
         mean_cosine_similarity = np.mean(cos_sim_within) if cos_sim_within else None
 
+
+        scaler = StandardScaler()
+        embeddings = scaler.fit_transform(embeddings)  # Normalize before DBI
+        dbi = davies_bouldin_score(embeddings, labels)
         # Compute Davies-Bouldin Index (Lower is better)
         dbi = davies_bouldin_score(embeddings, labels)
 
@@ -364,3 +373,42 @@ def fix_nan_inf(embeddings):
                 fixed_embeddings[neg_inf_mask, dim] = min_finite
         
         return fixed_embeddings
+
+
+def contrastive_loss_fn(embeddings1, embeddings2, embeddings3, temperature=0.07):
+    """
+    Computes Self-decoupled Modality-Shared Contrastive (SMC) loss for three modality embeddings.
+    
+    Args:
+        embeddings1 (Tensor): First set of embeddings (batch_size, emb_dim).
+        embeddings2 (Tensor): Second set of embeddings (batch_size, emb_dim).
+        embeddings3 (Tensor): Third set of embeddings (batch_size, emb_dim).
+        temperature (float): Temperature scaling for softmax.
+    
+    Returns:
+        Tensor: SMC contrastive loss value (scalar).
+    """
+    # Normalize embeddings
+    #embeddings1 = F.normalize(embeddings1, dim=1)
+    #embeddings2 = F.normalize(embeddings2, dim=1)
+    #embeddings3 = F.normalize(embeddings3, dim=1)
+    
+    # Stack embeddings for easier computation
+    all_embeddings = torch.stack([embeddings1, embeddings2, embeddings3])  # Shape (3, batch_size, emb_dim)
+    batch_size = embeddings1.shape[0]
+    
+    # Compute cosine similarity between all pairs of embeddings
+    similarity_matrix = torch.einsum('mbd,nbd->mn', all_embeddings, all_embeddings) / temperature
+    
+    # Create label similarity matrix (same sample across modalities = positive, others = negative)
+    labels = torch.arange(batch_size, device=embeddings1.device)
+    labels_matrix = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()  # Shape (batch, batch)
+    
+    # Compute log softmax for numerical stability
+    log_probs = F.log_softmax(similarity_matrix, dim=1)
+    
+    # Decouple self-contrast by ignoring diagonal elements (self-comparisons)
+    contrastive_loss = -log_probs * labels_matrix
+    contrastive_loss = contrastive_loss.sum() / (labels_matrix.sum() + 1e-8)  # Avoid division by zero
+    
+    return contrastive_loss

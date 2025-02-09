@@ -32,6 +32,8 @@ model:
   text_layers: 1
   visual_input_size: 35
   visual_layers: 1
+  enable_plot_embeddings: true
+  lambda_contrastive: 0.1 
 num_classes: 1
 optimizer:
   learning_rate: 0.0005

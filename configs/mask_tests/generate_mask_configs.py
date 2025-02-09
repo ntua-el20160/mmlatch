@@ -42,6 +42,7 @@ for idx in mask_index:
             noise_percentage_test: 0.0
             noise_modality: all
             enable_plot_embeddings: true
+            lambda_contrastive: 0.1 
 
         experiment:
             name: mask_train-test-{idx}

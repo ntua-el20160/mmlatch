@@ -372,6 +372,7 @@ if __name__ == "__main__":
             lr_scheduler=lr_scheduler,
             device=C["device"],
             enable_plot_embeddings=False # we enable this flag only at test trainer (if it is true  in the config file)
+            lambda_contrastive=C["model"]["lambda_contrastive"]
         )
 
     if C["debug"]:
@@ -402,8 +403,8 @@ if __name__ == "__main__":
             retain_graph=C["trainer"]["retain_graph"],
             loss_fn=criterion,
             device=C["device"],
-            enable_plot_embeddings=C["model"]["enable_plot_embeddings"]
-            
+            enable_plot_embeddings=C["model"]["enable_plot_embeddings"],
+            lambda_contrastive=C["model"]["lambda_contrastive"],
         )
         #UPDATE MASK INDEX HERE IF NEEDED
         trainer.set_mask_index(C["model"]["mask_index_test"])
