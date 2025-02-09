@@ -6,7 +6,7 @@ i=0
 for idx in mask_index:
     print(f"{i}  train-test-{idx}")
     i+=1
-    filename = f"mask_train-test-{idx}.yaml"
+    filename = f"mask_train-test-{idx}_contrastive.yaml"
     with open(filename, 'w') as config_out:
         config_out.write(
         f"""
@@ -24,6 +24,7 @@ for idx in mask_index:
             audio_input_size: 74
             visual_input_size: 35
             projection_size: 100
+            augment_train_data: false
             text_layers: 1
             audio_layers: 1
             visual_layers: 1
@@ -45,7 +46,7 @@ for idx in mask_index:
             lambda_contrastive: 0.1 
 
         experiment:
-            name: mask_train-test-{idx}
+            name: mask_train-test-{idx}-contrastive
             description: MOSEI sentiment task
 
         dataloaders:

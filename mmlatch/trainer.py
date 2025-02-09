@@ -81,6 +81,10 @@ class Trainer(object):
             loss, _, _, _, _, _ = output
             return loss
         
+        def total_loss_output_transform(output):
+            _, y_pred, y, *_ = output  # Extract y_pred and y
+            return y_pred, y
+
         if "loss" not in metrics:
             metrics["loss"] = Loss(total_loss_output_transform)
         #initialize the trainer, train evaluator and validation evaluator

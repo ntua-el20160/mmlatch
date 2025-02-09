@@ -7,7 +7,7 @@ debug: false
 device: cuda
 experiment:
   description: MOSEI sentiment task
-  name: noise_audio_shuffle_high
+  name: noise_audio_shuffle_high-contrastive
 model:
   attention: true
   audio_input_size: 74
@@ -32,6 +32,7 @@ model:
   text_layers: 1
   visual_input_size: 35
   visual_layers: 1
+  lambda_contrastive: 0.1 
 num_classes: 1
 optimizer:
   learning_rate: 0.0005

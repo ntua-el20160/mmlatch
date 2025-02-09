@@ -308,20 +308,20 @@ if __name__ == "__main__":
     criterion = nn.L1Loss()
 
     def bin_acc_transform(output):
-        y_pred, y = output
+        _,y_pred, y,_,_,_ = output
         nz = torch.nonzero(y).squeeze()
         yp, yt = (y_pred[nz] >= 0).long(), (y[nz] >= 0).long()
 
         return yp, yt
 
     def acc_transform(output):
-        y_pred, y = output
+        _,y_pred, y,_,_,_ = output
         yp, yt = (y_pred >= 0).long(), (y >= 0).long()
 
         return yp, yt
 
     def acc7_transform(output):
-        y_pred, y = output
+        _, y_pred, y,_,_,_ = output
         yp = torch.clamp(torch.round(y_pred) + 3, 0, 6).view(-1).long()
         yt = torch.round(y).view(-1).long() + 3
         yp = F.one_hot(yp, 7)
@@ -329,7 +329,7 @@ if __name__ == "__main__":
         return yp, yt
 
     def acc5_transform(output):
-        y_pred, y = output
+        _,y_pred, y,_,_,_ = output
         yp = torch.clamp(torch.round(y_pred) + 2, 0, 4).view(-1).long()
         yt = torch.round(y).view(-1).long() + 2
         yp = F.one_hot(yp, 5)

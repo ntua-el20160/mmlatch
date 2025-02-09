@@ -27,7 +27,7 @@ for train_mod in noise_modalities:
         for j, train_type in enumerate(noise_types):
             print(f"{i}  train {train_mod} {train_type} {train_level} ({noise_levels[train_level][j]})")
             i+=1
-            filename = f"{train_mod}_{train_type}_{train_level}.yaml"
+            filename = f"{train_mod}_{train_type}_{train_level}_contrastive.yaml"
             with open(filename, 'w') as config_out:
                 config_out.write(
                 f"""
@@ -45,6 +45,7 @@ for train_mod in noise_modalities:
                     audio_input_size: 74
                     visual_input_size: 35
                     projection_size: 100
+                    augment_train_data: false
                     text_layers: 1
                     audio_layers: 1
                     visual_layers: 1
@@ -66,7 +67,7 @@ for train_mod in noise_modalities:
                     lambda_contrastive: 0.1 
 
                 experiment:
-                    name: noise_{train_mod}_{train_type}_{train_level}
+                    name: noise_{train_mod}_{train_type}_{train_level}-contrastive
                     description: MOSEI sentiment task
 
                 dataloaders:
