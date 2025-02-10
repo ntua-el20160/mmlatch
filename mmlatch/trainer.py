@@ -244,7 +244,7 @@ class Trainer(object):
 
             return loss, y_pred, targets, emb_txt, emb_au, emb_vi
     def predict(self: TrainerType, dataloader: DataLoader) -> State:
-        predictions, targets,masks_txt,masks_au,masks_vi,embs_txt, embs_au, embs_vi = [],[],[],[],[], []
+        predictions, targets,masks_txt,masks_au,masks_vi,embs_txt, embs_au, embs_vi = [],[],[],[],[], [], [], []
 
         for batch in dataloader:
             self.model.eval()

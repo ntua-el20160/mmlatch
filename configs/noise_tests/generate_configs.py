@@ -64,7 +64,7 @@ for train_mod in noise_modalities:
                     noise_percentage_test: 0.0
                     noise_modality: {train_mod}
                     enable_plot_embeddings: true
-                    lambda_contrastive: 0.1 
+                    lambda_contrastive: 0.3 
 
                 experiment:
                     name: noise_{train_mod}_{train_type}_{train_level}-contrastive
