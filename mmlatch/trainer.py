@@ -243,6 +243,24 @@ class Trainer(object):
             loss = mae_loss + self.lambda_contrastive * contrastive_loss
 
             return loss, y_pred, targets, emb_txt, emb_au, emb_vi
+    def predict(self: TrainerType, dataloader: DataLoader) -> State:
+        predictions, targets,masks_txt,masks_au,masks_vi,embs_txt, embs_au, embs_vi = [],[],[],[],[], []
+
+        for batch in dataloader:
+            self.model.eval()
+            with torch.no_grad():
+                pred, targ,mask_txt,mask_au,mask_vi,emb_txt, emb_au, emb_vi = self.get_predictions_and_targets(batch)
+                predictions.append(pred)
+                targets.append(targ)
+                masks_txt.append(mask_txt)
+                masks_au.append(mask_au)
+                masks_vi.append(mask_vi)
+                embs_txt.append(emb_txt)
+                embs_au.append(emb_au)
+                embs_vi.append(emb_vi)
+                
+
+        return predictions, targets,masks_txt,masks_au,masks_vi, 
 
     
     def set_mask_index(self, new_mask_index):
@@ -341,6 +359,7 @@ class Trainer(object):
         self.valid_evaluator.add_event_handler(Events.EXCEPTION_RAISED, graceful_exit)
 
         return self
+
 
 
 class MOSEITrainer(Trainer):#inherits from the Trainer class and specialises 2 functions for MOSEI dataset
