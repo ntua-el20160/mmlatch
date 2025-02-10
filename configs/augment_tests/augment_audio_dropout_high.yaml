@@ -7,7 +7,7 @@ debug: false
 device: cuda
 experiment:
   description: MOSEI sentiment task
-  name: noise_audio_dropout_high
+  name: augment_audio_dropout_high
 model:
   attention: true
   audio_input_size: 74
