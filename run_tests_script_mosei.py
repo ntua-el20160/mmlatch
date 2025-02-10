@@ -2,8 +2,24 @@ import subprocess
 import os
 import glob
 
+def find_output_dirs(directory):
+    """Finds all output directories in the given directory and returns only their names."""
+    # Get the full paths of all directories
+    dir_paths = glob.glob(os.path.join(directory, "*"))
+    
+    # Extract only the directory names
+    dir_names = [os.path.basename(dir_path) for dir_path in dir_paths if os.path.isdir(dir_path)]
+    
+    # Include special case: "no_mmlatch_test"
+    dir_names.append("no_mmlatch")
+
+    return dir_names
+
 def run_command(yaml_file):
     """Runs the command with the given YAML file, printing its contents."""
+
+    exp_name = yaml_file.split('/')[-1][:-5]
+    output_dirs = find_output_dirs("/content/drive/MyDrive/our_results")
 
     # Print the config file contents
     try:
@@ -12,7 +28,11 @@ def run_command(yaml_file):
     except FileNotFoundError:
         print(f"Error: Config file {yaml_file} not found.")
         return  # Skip this file if it's not found
-
+    
+    if exp_name in output_dirs:
+        print(f"{exp_name} already completed")
+        return
+    
     command = ["python", "mmlatch/run_mosei.py", "--config", yaml_file]
     print(f"Executing: {' '.join(command)}")  # Print the command
 
