@@ -378,9 +378,7 @@ import torch
 import torch.nn.functional as F
 
 def contrastive_loss_fn(embeddings1, embeddings2, embeddings3, temperature=0.07):
-    """
-    Computes Self-decoupled Modality-Shared Contrastive (SMC) loss for three modality embeddings.
-    """
+    
     # Normalize embeddings
     embeddings1 = F.normalize(embeddings1, dim=1)
     embeddings2 = F.normalize(embeddings2, dim=1)
