@@ -567,6 +567,9 @@ class AVTEncoder(nn.Module):
         self.all_au_embeddings_after = []
         self.all_vi_embeddings_after = []
 
+        self.fused_before = []
+        self.fused_after = []
+
         self.text = UnimodalEncoder(
             text_input_size,
             projection_size,
@@ -659,17 +662,19 @@ class AVTEncoder(nn.Module):
                 self.all_au_embeddings_before.append(au1.mean(dim=1).detach().cpu().numpy())
                 self.all_vi_embeddings_before.append(vi1.mean(dim=1).detach().cpu().numpy())
 
+                fused_before = self._fuse(txt1, au1, vi1, lengths)
+                self.fused_before.append(fused_before.detach().cpu().numpy)
+
             txt, au, vi, mask_txt, mask_au, mask_vi = self.fm(txt, au, vi, txt1, au1, vi1, lengths=lengths)
 
         txt, au, vi = self._encode(txt, au, vi, lengths)
+        fused = self._fuse(txt, au, vi, lengths)
 
         if enable_plot_embeddings:
             self.all_txt_embeddings_after.append(txt.mean(dim=1).detach().cpu().numpy())
             self.all_au_embeddings_after.append(au.mean(dim=1).detach().cpu().numpy())
             self.all_vi_embeddings_after.append(vi.mean(dim=1).detach().cpu().numpy())
-
-        
-        fused = self._fuse(txt, au, vi, lengths)
+            self.fused_after.append(fused_before.detach().cpu().numpy)
 
         return fused, mask_txt, mask_au, mask_vi
 
@@ -682,19 +687,15 @@ class AVTEncoder(nn.Module):
             return
 
         modalities = ['txt', 'au', 'vi']
-        fig, axes = plt.subplots(3, 2, figsize=(12, 18))
+        fig, axes = plt.subplots(4, 2, figsize=(12, 24))  # Added an extra row for fused embeddings
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  
-        # Ensure the directory exists before saving the file
         save_dir = f"{results_dir}/plot-representations"
-        os.makedirs(save_dir, exist_ok=True)  # Creates the directory if it doesn't exist
-
-        # Define the full save path
+        os.makedirs(save_dir, exist_ok=True)
         save_path = f"{save_dir}/embeddings_mask_{self.mask_index}_{timestamp}.png"
 
-        # Round targets to nearest integer
         if torch.is_tensor(targets):
             targets = targets.cpu().numpy()
-            
+        
         targets = np.clip(np.round(targets).astype(int), -3, 3)
 
         for i, modality in enumerate(modalities):
@@ -712,16 +713,15 @@ class AVTEncoder(nn.Module):
 
             embeddings_before = {"before": before_2d, "after": after_2d}
 
-            # Compute metrics (Silhouette + Davies-Bouldin)
             silhouette_before, cos_sim_before, dbi_before = compute_metrics_embeddings(embeddings_before["before"], targets)
             silhouette_after, cos_sim_after, dbi_after = compute_metrics_embeddings(embeddings_before["after"], targets)
 
-            print(f"Silhouette score before: {silhouette_before}")
-            print(f"Silhouette score after: {silhouette_after}")
-            print(f"Cosine similarity before: {cos_sim_before}")
-            print(f"Cosine similarity after: {cos_sim_after}")
-            print(f"Davies-Bouldin Index before: {dbi_before}")
-            print(f"Davies-Bouldin Index after: {dbi_after}")
+            print(f"{modality} Silhouette score before: {silhouette_before}")
+            print(f"{modality} Silhouette score after: {silhouette_after}")
+            print(f"{modality} Cosine similarity before: {cos_sim_before}")
+            print(f"{modality} Cosine similarity after: {cos_sim_after}")
+            print(f"{modality} Davies-Bouldin Index before: {dbi_before}")
+            print(f"{modality} Davies-Bouldin Index after: {dbi_after}")
 
             plot_umap(
                 embeddings_before, 
@@ -731,9 +731,40 @@ class AVTEncoder(nn.Module):
                 axes[i, 0], axes[i, 1], save_path
             )
 
+        # Separate plot for fused embeddings
+        fig_fused, ax_fused = plt.subplots(1, 2, figsize=(12, 6))
+        save_fused_path = f"{save_dir}/fused_embeddings_mask_{self.mask_index}_{timestamp}.png"
+
+        fused_before_2d = np.concatenate(self.fused_before, axis=0)
+        fused_after_2d = np.concatenate(self.fused_after, axis=0)
+
+        #fused_before_2d = fix_nan_inf(fused_before_2d)
+        #fused_after_2d = fix_nan_inf(fused_after_2d)
+
+        fused_embeddings = {"before": fused_before_2d, "after": fused_after_2d}
+        
+        silhouette_before, cos_sim_before, dbi_before = compute_metrics_embeddings(fused_embeddings["before"], targets)
+        silhouette_after, cos_sim_after, dbi_after = compute_metrics_embeddings(fused_embeddings["after"], targets)
+        
+        print(f"Fused Silhouette score before: {silhouette_before}")
+        print(f"Fused Silhouette score after: {silhouette_after}")
+        print(f"Fused Cosine similarity before: {cos_sim_before}")
+        print(f"Fused Cosine similarity after: {cos_sim_after}")
+        print(f"Fused Davies-Bouldin Index before: {dbi_before}")
+        print(f"Fused Davies-Bouldin Index after: {dbi_after}")
+        
+        plot_umap(
+            fused_embeddings, 
+            targets,
+            f"Fused Embeddings Before\nSilhouette: {silhouette_before:.2f}, Cosine Sim: {cos_sim_before:.2f}, DBI: {dbi_before:.2f}",
+            f"Fused Embeddings After\nSilhouette: {silhouette_after:.2f}, Cosine Sim: {cos_sim_after:.2f}, DBI: {dbi_after:.2f}",
+            ax_fused[0], ax_fused[1], save_fused_path
+        )
+
         plt.tight_layout()
+        plt.savefig(save_fused_path)
         plt.show()
-    
+
 
 
 
