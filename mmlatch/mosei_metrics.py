@@ -19,7 +19,7 @@ import torch
 def process_label(value):
         """Rounds the value to the nearest integer and clips it within the allowed range."""
         rounded = round(value)
-        return max(-3.0, min(rounded, 3.0))
+        return max(-3, min(rounded, 3))
 def save_comparison_data_pickle(filepath, predictions, targets, masks_txt, masks_au, masks_vi):
     """
     Saves predictions, targets, and masks to a pickle file.

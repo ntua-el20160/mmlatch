@@ -7,7 +7,7 @@ debug: false
 device: cuda
 experiment:
   description: MOSEI sentiment task
-  name: base-test-MOSEI
+  name: base-test-MOSEI-2
 model:
   attention: true
   audio_input_size: 74
