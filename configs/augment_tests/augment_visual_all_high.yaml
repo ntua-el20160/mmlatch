@@ -7,7 +7,11 @@ debug: false
 device: cuda
 experiment:
   description: MOSEI sentiment task
+<<<<<<< HEAD
   name: noise_visual_all_high-contrastive
+=======
+  name: augment_visual_all_high
+>>>>>>> main
 model:
   attention: true
   audio_input_size: 74

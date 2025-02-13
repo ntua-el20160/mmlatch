@@ -7,7 +7,11 @@ debug: false
 device: cuda
 experiment:
   description: MOSEI sentiment task
+<<<<<<< HEAD
   name: noise_all_shuffle_low-contrastive
+=======
+  name: augment_all_shuffle_low
+>>>>>>> main
 model:
   attention: true
   audio_input_size: 74

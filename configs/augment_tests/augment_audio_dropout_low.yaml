@@ -7,7 +7,11 @@ debug: false
 device: cuda
 experiment:
   description: MOSEI sentiment task
+<<<<<<< HEAD
   name: noise_audio_dropout_low-contrastive
+=======
+  name: augment_audio_dropout_low
+>>>>>>> main
 model:
   attention: true
   audio_input_size: 74

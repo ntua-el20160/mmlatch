@@ -172,6 +172,9 @@ if __name__ == "__main__":
     if os.path.exists(results_dir):
         print(f"Directory {results_dir} already exists. Exiting...")
         sys.exit(1)  # Exits the script with a non-zero status code
+    safe_mkdirs(results_dir+"/numeric_results") #creates the directory for the results if it does not exist
+    safe_mkdirs(results_dir+"/plot_images") #creates the directory for the plots if it does not exist
+    safe_mkdirs(results_dir+"/plot_numbers")
     
     print("Running with configuration")
     pprint(C)
@@ -448,9 +451,9 @@ if __name__ == "__main__":
 
         eval_results = eval_mosei_senti(pred, y_test, True)
         print_metrics(eval_results)
-        safe_mkdirs(results_dir+"/numeric_results") #creates the directory for the results if it does not exist
-        safe_mkdirs(results_dir+"/plot_images") #creates the directory for the plots if it does not exist
-        safe_mkdirs(results_dir+"/plot_numbers")
+        # safe_mkdirs(results_dir+"/numeric_results") #creates the directory for the results if it does not exist
+        # safe_mkdirs(results_dir+"/plot_images") #creates the directory for the plots if it does not exist
+        # safe_mkdirs(results_dir+"/plot_numbers")
         fname = f'results'
         results_file = os.path.join(results_dir + f"/numeric_results", fname)
         fname2 = fname + "_masks"
