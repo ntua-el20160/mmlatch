@@ -732,7 +732,6 @@ class AVTEncoder(nn.Module):
             )
 
         # Separate plot for fused embeddings
-        fig_fused, ax_fused = plt.subplots(1, 2, figsize=(12, 6))
         save_fused_path = f"{save_dir}/fused_embeddings_mask_{self.mask_index}_{timestamp}.png"
 
         fused_before_2d = np.concatenate(self.fused_before, axis=0)
@@ -758,7 +757,7 @@ class AVTEncoder(nn.Module):
             targets,
             f"Fused Embeddings Before\nSilhouette: {silhouette_before:.2f}, Cosine Sim: {cos_sim_before:.2f}, DBI: {dbi_before:.2f}",
             f"Fused Embeddings After\nSilhouette: {silhouette_after:.2f}, Cosine Sim: {cos_sim_after:.2f}, DBI: {dbi_after:.2f}",
-            ax_fused[0], ax_fused[1], save_fused_path
+            axes[3, 0], axes[3, 1], save_path
         )
 
         plt.tight_layout()

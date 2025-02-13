@@ -378,7 +378,6 @@ import torch
 import torch.nn.functional as F
 
 def contrastive_loss_fn(embeddings1, embeddings2, embeddings3, temperature=0.07):
-    
     # Normalize embeddings
     embeddings1 = F.normalize(embeddings1, dim=1)
     embeddings2 = F.normalize(embeddings2, dim=1)
@@ -399,3 +398,39 @@ def contrastive_loss_fn(embeddings1, embeddings2, embeddings3, temperature=0.07)
     contrastive_loss = F.cross_entropy(similarity_matrix, labels)
 
     return contrastive_loss
+
+"""
+def contrastive_loss_fn(embeddings1, embeddings2, embeddings3, temperature=0.07):
+    # Normalize embeddings
+    embeddings1 = F.normalize(embeddings1, dim=1)
+    embeddings2 = F.normalize(embeddings2, dim=1)
+    embeddings3 = F.normalize(embeddings3, dim=1)
+
+    # Concatenate embeddings along batch dimension
+    all_embeddings = torch.cat([embeddings1, embeddings2, embeddings3], dim=0)  # Shape (3*batch_size, emb_dim)
+    batch_size = embeddings1.shape[0]
+
+    # Compute cosine similarity
+    similarity_matrix = torch.matmul(all_embeddings, all_embeddings.T) / temperature  # Shape (3*batch_size, 3*batch_size)
+
+    # Mask self similarities
+    mask = torch.eye(3 * batch_size, device=embeddings1.device).bool()
+    similarity_matrix.masked_fill_(mask, float('-inf'))
+
+    # Mask positive pairs (same samples across different modalities)
+    pos_mask = torch.zeros_like(similarity_matrix, dtype=torch.bool, device=embeddings1.device)
+    for i in range(3):
+        for j in range(i + 1, 3):
+            pos_mask[i * batch_size:(i + 1) * batch_size, j * batch_size:(j + 1) * batch_size] = True
+            pos_mask[j * batch_size:(j + 1) * batch_size, i * batch_size:(i + 1) * batch_size] = True
+    similarity_matrix.masked_fill_(pos_mask, float('-inf'))
+
+    # Create labels for positive samples
+    labels = torch.arange(batch_size, device=embeddings1.device)
+    labels = labels.repeat(3)  # Expand to match all modalities
+
+    # Compute loss using cross-entropy
+    contrastive_loss = F.cross_entropy(similarity_matrix, labels)
+
+    return contrastive_loss
+"""
