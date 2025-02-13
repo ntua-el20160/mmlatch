@@ -663,7 +663,7 @@ class AVTEncoder(nn.Module):
                 self.all_vi_embeddings_before.append(vi1.mean(dim=1).detach().cpu().numpy())
 
                 fused_before = self._fuse(txt1, au1, vi1, lengths)
-                self.fused_before.append(fused_before.detach().cpu().numpy)
+                self.fused_before.append(fused_before.detach().cpu().numpy())
 
             txt, au, vi, mask_txt, mask_au, mask_vi = self.fm(txt, au, vi, txt1, au1, vi1, lengths=lengths)
 
@@ -674,9 +674,9 @@ class AVTEncoder(nn.Module):
             self.all_txt_embeddings_after.append(txt.mean(dim=1).detach().cpu().numpy())
             self.all_au_embeddings_after.append(au.mean(dim=1).detach().cpu().numpy())
             self.all_vi_embeddings_after.append(vi.mean(dim=1).detach().cpu().numpy())
-            self.fused_after.append(fused_before.detach().cpu().numpy)
+            self.fused_after.append(fused.detach().cpu().numpy())
 
-        return fused, mask_txt, mask_au, mask_vi
+        return fused, mask_txt, mask_au, mask_vi, txt, au, vi
 
     
     
@@ -732,7 +732,6 @@ class AVTEncoder(nn.Module):
             )
 
         # Separate plot for fused embeddings
-        fig_fused, ax_fused = plt.subplots(1, 2, figsize=(12, 6))
         save_fused_path = f"{save_dir}/fused_embeddings_mask_{self.mask_index}_{timestamp}.png"
 
         fused_before_2d = np.concatenate(self.fused_before, axis=0)
@@ -758,7 +757,7 @@ class AVTEncoder(nn.Module):
             targets,
             f"Fused Embeddings Before\nSilhouette: {silhouette_before:.2f}, Cosine Sim: {cos_sim_before:.2f}, DBI: {dbi_before:.2f}",
             f"Fused Embeddings After\nSilhouette: {silhouette_after:.2f}, Cosine Sim: {cos_sim_after:.2f}, DBI: {dbi_after:.2f}",
-            ax_fused[0], ax_fused[1], save_fused_path
+            axes[3, 0], axes[3, 1], save_path
         )
 
         plt.tight_layout()
@@ -829,11 +828,11 @@ class AVTClassifier(nn.Module):
         """Updates mask_dropout for all Feedback ."""
         self.encoder.set_mask_dropout(new_mask_dropout)
     def forward(self, inputs, enable_plot_embeddings):
-        out,mask_txt,mask_au,mask_vi = self.encoder(
+        out,mask_txt,mask_au,mask_vi, txt, au, vi = self.encoder(
             inputs["text"], inputs["audio"], inputs["visual"], inputs["lengths"], enable_plot_embeddings
         )
 
-        return self.classifier(out),mask_txt,mask_au,mask_vi
+        return self.classifier(out),mask_txt,mask_au,mask_vi, txt, au, vi
     
     def plot_embeddings(self, targets=None, results_dir=None):
         self.encoder.plot_embeddings(targets, results_dir)
