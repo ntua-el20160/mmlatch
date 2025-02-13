@@ -181,9 +181,8 @@ def compare_masks(data_new, data_comparison_link):
                 dict_temp_pred[pred] = []
             
             #flatten them to the feature dimension
-            mask_flat_new = np.mean(mask_new[i], axis=(0, 1))
-            mask_flat_comp = np.mean(mask_comparison[i], axis=(0, 1))
-
+            mask_flat_new = np.mean(mask_new[i], axis=(0))
+            mask_flat_comp = np.mean(mask_comparison[i], axis=(0))
             #append the flattened masks to the list for mean per modality
             masks_transformed_new.append(mask_flat_new)
             masks_transformed_comp.append(mask_flat_comp)

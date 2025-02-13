@@ -322,8 +322,10 @@ class MOSEITrainer(Trainer):#inherits from the Trainer class and specialises 2 f
     ) -> Tuple[torch.Tensor, ...]:
         inputs, targets = self.parse_batch(batch)
         #y_pred = self.model(inputs)
-        y_pred,mask_txt,mask_au,mask_vi = self.model(inputs, self.enable_plot_embeddings)
+        y_pred, mask_txt, mask_au, mask_vi, *rest = self.model(inputs, self.enable_plot_embeddings)
+
         y_pred = y_pred.squeeze()
         targets = targets.squeeze()
+
 
         return y_pred, targets, mask_txt,mask_au,mask_vi

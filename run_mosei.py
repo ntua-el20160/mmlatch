@@ -424,9 +424,21 @@ if __name__ == "__main__":
         
         if C["model"]["enable_plot_embeddings"]:
             model.plot_embeddings(torch.cat(targets), results_dir)
-           
-
-
+        all_samples_txt =[]
+        for batch in masks_txt:  # each `batch` is of shape [batch_size, sequence_length, feature_dimension]
+            for sample in batch:
+                all_samples_txt.append(sample)
+        all_samples_au =[]
+        for batch in masks_au:  # each `batch` is of shape [batch_size, sequence_length, feature_dimension]
+            for sample in batch:
+                all_samples_au.append(sample)
+        all_samples_vi =[]
+        for batch in masks_vi:  # each `batch` is of shape [batch_size, sequence_length, feature_dimension]
+            for sample in batch:
+                all_samples_vi.append(sample)
+        masks_txt = all_samples_txt
+        masks_au = all_samples_au
+        masks_vi = all_samples_vi
 
 
 
@@ -460,7 +472,7 @@ if __name__ == "__main__":
 
         comparison_filename = f"comparison_mask.pkl"
         comparison_filepath = os.path.join(C["results_dir"], comparison_filename)
-        if experiment_name == 'base-test-MOSEI':
+        if experiment_name == 'base-test-MOSEI-2':
             save_comparison_data_pickle(comparison_filepath, pred, y_test, masks_txt, masks_au, masks_vi)
 
         data = {
@@ -537,6 +549,21 @@ if __name__ == "__main__":
 
                     pred = torch.cat(predictions)
                     y_test = torch.cat(targets)
+                    all_samples_txt =[]
+                    for batch in masks_txt:  # each `batch` is of shape [batch_size, sequence_length, feature_dimension]
+                        for sample in batch:
+                            all_samples_txt.append(sample)
+                    all_samples_au =[]
+                    for batch in masks_au:  # each `batch` is of shape [batch_size, sequence_length, feature_dimension]
+                        for sample in batch:
+                            all_samples_au.append(sample)
+                    all_samples_vi =[]
+                    for batch in masks_vi:  # each `batch` is of shape [batch_size, sequence_length, feature_dimension]
+                        for sample in batch:
+                            all_samples_vi.append(sample)
+                    masks_txt = all_samples_txt
+                    masks_au = all_samples_au
+                    masks_vi = all_samples_vi
                     data = {
                         'predictions': pred.cpu().numpy(),      # Removed torch.cat
                         'targets': y_test.cpu().numpy(),        # Removed torch.cat
@@ -544,7 +571,6 @@ if __name__ == "__main__":
                         'masks_au': [mask.cpu().numpy() for mask in masks_au],
                         'masks_vi': [mask.cpu().numpy() for mask in masks_vi],
                     }
-
                     eval_results = eval_mosei_senti(pred, y_test, True)
                     avg_metrics, _, _,_ = compare_masks(data, comparison_filepath)
 
